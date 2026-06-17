@@ -1,0 +1,150 @@
+{
+  "roof": {
+    "width": 390,
+    "height": 153
+  },
+  "edgeMargin": 0,
+  "panelGap": 0,
+  "keepOuts": [
+    {
+      "id": "keepout-mqfs7q10-9",
+      "label": "Fenster 1",
+      "x": 179,
+      "y": 28,
+      "w": 67,
+      "h": 73
+    },
+    {
+      "id": "keepout-mqfs8mkq-10",
+      "label": "Fan",
+      "x": 323,
+      "y": 96,
+      "w": 59,
+      "h": 45
+    },
+    {
+      "id": "keepout-mqfuobzz-2",
+      "label": "Steg 1",
+      "x": 159,
+      "y": 142,
+      "w": 230,
+      "h": 10
+    },
+    {
+      "id": "keepout-mqfvjhgm-3",
+      "label": "Hängematte",
+      "x": 159,
+      "y": 12,
+      "w": 20,
+      "h": 130
+    },
+    {
+      "id": "keepout-mqfvpiov-4",
+      "label": "Steg 2",
+      "x": 0,
+      "y": 0,
+      "w": 170,
+      "h": 10
+    }
+  ],
+  "panelOptions": [
+    {
+      "id": "panel-1",
+      "name": "WS 80",
+      "width": 27.2,
+      "height": 144,
+      "power": 80
+    },
+    {
+      "id": "panel-2",
+      "name": "WS 95",
+      "width": 52.5,
+      "height": 80.1,
+      "power": 95
+    },
+    {
+      "id": "panel-mqfs2ano-1",
+      "name": "WS 100L",
+      "width": 39.8,
+      "height": 118.5,
+      "power": 100
+    },
+    {
+      "id": "panel-mqfs2vfs-2",
+      "name": "WS 125",
+      "width": 52.5,
+      "height": 104.5,
+      "power": 125
+    },
+    {
+      "id": "panel-mqfs3rgj-3",
+      "name": "WS 125L",
+      "width": 39.8,
+      "height": 142.5,
+      "power": 125
+    },
+    {
+      "id": "panel-mqfs4gnj-4",
+      "name": "WS 125HV",
+      "width": 52.5,
+      "height": 105.7,
+      "power": 125
+    },
+    {
+      "id": "panel-mqfs5jst-5",
+      "name": "WS 175",
+      "width": 52.5,
+      "height": 142.5,
+      "power": 175
+    },
+    {
+      "id": "panel-mqfs6cmp-6",
+      "name": "WS 175HV",
+      "width": 52.5,
+      "height": 144,
+      "power": 175
+    },
+    {
+      "id": "panel-mqfs6txf-7",
+      "name": "WS 190",
+      "width": 91.8,
+      "height": 91.8,
+      "power": 190
+    },
+    {
+      "id": "panel-mqfs7b7n-8",
+      "name": "WS 210",
+      "width": 65,
+      "height": 142.5,
+      "power": 210
+    },
+    {
+      "id": "panel-mqftyyuf-1",
+      "name": "TE 125",
+      "width": 40,
+      "height": 147,
+      "power": 125
+    },
+    {
+      "id": "panel-mqfu09hf-2",
+      "name": "TE 150",
+      "width": 53,
+      "height": 130.5,
+      "power": 150
+    },
+    {
+      "id": "panel-mqfu0rpv-3",
+      "name": "TE 180",
+      "width": 70,
+      "height": 119,
+      "power": 180
+    },
+    {
+      "id": "panel-mqfu1ggl-4",
+      "name": "TE 185",
+      "width": 77,
+      "height": 108,
+      "power": 185
+    }
+  ]
+}
