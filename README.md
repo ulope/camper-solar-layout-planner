@@ -5,6 +5,10 @@ Define the usable roof area, mark keep-out zones (hatches, vents, antennas, etc)
 catalog of candidate panel models, and the app computes and visually displays an
 optimized selection and placement that **maximizes total watt-peak (Wp)**.
 
+
+https://ulope.github.io/camper-solar-layout-planner/
+
+
 ## Examples
 
 - Simple
