@@ -13,6 +13,7 @@ import {
   type OrientMode,
 } from './optimize';
 import { rankLayouts, type RankOptions } from './ranking';
+import { packablePanels } from './panels';
 
 const EPS = 1e-6;
 
@@ -157,7 +158,7 @@ export function optimizeThorough(config: Config, opts: ThoroughOpts = {}): Layou
   } = opts;
 
   const usable = usableArea(config);
-  const valid = config.panelOptions.filter((o) => o.width > 0 && o.height > 0 && o.power > 0);
+  const valid = packablePanels(config.panelOptions);
 
   // Seed with the fast result — guarantees Thorough ≥ Fast.
   const byComposition = new Map<string, Layout>();

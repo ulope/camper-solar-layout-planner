@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { config, removePanelOption } from '../lib/stores';
+  import { config, removePanelOption, setPanelEnabled } from '../lib/stores';
   import { panelColor } from '../lib/colors';
+  import { isPanelEnabled } from '../lib/panels';
   import { fmtNum, fmtPrice } from '../lib/format';
   import type { PanelOption } from '../lib/types';
   import PanelOptionModal from './PanelOptionModal.svelte';
@@ -22,6 +23,16 @@
     if (confirm(`Remove the panel model “${opt.name}”?`)) removePanelOption(opt.id);
   }
 
+  // Displayed alphabetically, but each row keeps its option's index in the stored
+  // list so the swatch matches the canvas and the results breakdown. Numeric-aware
+  // so "Model 2" sorts before "Model 10".
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  const sorted = $derived(
+    $config.panelOptions
+      .map((opt, i) => ({ opt, i }))
+      .sort((a, b) => collator.compare(a.opt.name, b.opt.name)),
+  );
+
   // Condensed one-line spec; optional fields are simply left out when unset.
   function specOf(o: PanelOption): string {
     return [
@@ -33,6 +44,10 @@
       .filter(Boolean)
       .join(' · ');
   }
+
+  const noneSelected = $derived(
+    $config.panelOptions.length > 0 && !$config.panelOptions.some(isPanelEnabled),
+  );
 </script>
 
 <section class="card">
@@ -40,14 +55,27 @@
     <h2>Panel options</h2>
     <button class="ghost" onclick={openAdd}>+ Add</button>
   </div>
-  <p class="hint">Candidate models the optimizer can choose from. Click one to edit it.</p>
+  <p class="hint">
+    Candidate models the optimizer can choose from. Untick one to leave it out; click one to
+    edit it.
+  </p>
 
   {#if $config.panelOptions.length === 0}
     <p class="empty">No panel models yet. Add at least one.</p>
+  {:else if noneSelected}
+    <p class="empty">All models are deselected — tick at least one to optimize.</p>
   {/if}
 
-  {#each $config.panelOptions as opt, i (opt.id)}
-    <div class="row">
+  {#each sorted as { opt, i } (opt.id)}
+    <div class="row" class:off={!isPanelEnabled(opt)}>
+      <input
+        type="checkbox"
+        class="pick"
+        checked={isPanelEnabled(opt)}
+        title="Use {opt.name} when optimizing"
+        aria-label="Use {opt.name} when optimizing"
+        onchange={(e) => setPanelEnabled(opt.id, e.currentTarget.checked)}
+      />
       <button class="main" onclick={() => openEdit(opt)} title="Edit {opt.name}">
         <span class="swatch" style="background: {panelColor(i)}"></span>
         <span class="text">
@@ -95,10 +123,20 @@
   }
   .row {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
     gap: 4px;
     border-top: 1px solid var(--border);
+  }
+  /* Deselected models stay readable but visibly out of the running. */
+  .row.off .main {
+    opacity: 0.45;
+  }
+  .pick {
+    width: auto;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
   }
   .main {
     display: flex;
@@ -106,8 +144,8 @@
     gap: 9px;
     width: 100%;
     min-width: 0;
-    padding: 8px;
-    margin: 0 -8px 0 -8px;
+    padding: 8px 8px 8px 6px;
+    margin: 0 -8px 0 -2px;
     text-align: left;
     background: transparent;
     border: none;

@@ -55,6 +55,24 @@ describe('optimizeThorough', () => {
     }
   });
 
+  it('never places a deselected model', () => {
+    const config = baseConfig({
+      panelOptions: [panel('a', 50, 30, 80), { ...panel('b', 60, 40, 120), enabled: false }],
+    });
+    for (const layout of optimizeThorough(config, FIXED)) {
+      expect(layout.placements.every((p) => p.optionId === 'a')).toBe(true);
+    }
+  });
+
+  it('returns an empty layout when every model is deselected', () => {
+    const config = baseConfig({
+      panelOptions: [{ ...panel('a', 50, 30, 80), enabled: false }],
+    });
+    for (const layout of optimizeThorough(config, FIXED)) {
+      expect(layout.placements).toEqual([]);
+    }
+  });
+
   it('is never worse than the fast optimizer (seeded by it)', () => {
     const configs: Config[] = [
       baseConfig({ panelOptions: [panel('p', 100, 100, 100)] }), // exact tiling

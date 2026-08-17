@@ -14,6 +14,7 @@ export type PanelOption = {
   current?: number; // A (e.g. Imp) — optional, paired with voltage
   weight?: number; // kg — optional, used by the "lighter" optimization criterion
   price?: number; // currency units — optional, used by the "cheaper" criterion
+  enabled?: boolean; // false excludes the model from optimization; absent means selected
 };
 
 export type Config = {
