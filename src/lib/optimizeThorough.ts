@@ -12,6 +12,7 @@ import {
   shuffled,
   type OrientMode,
 } from './optimize';
+import { rankLayouts, type RankOptions } from './ranking';
 
 const EPS = 1e-6;
 
@@ -27,6 +28,7 @@ export type ThoroughOpts = {
   maxIterations?: number; // hard iteration cap (default Infinity); tests use this for determinism
   seed?: number;
   maxResults?: number;
+  rank?: RankOptions; // secondary criteria used to order the results (not the search)
   onProgress?: (p: ThoroughProgress) => void;
   shouldStop?: () => boolean; // cooperative cancellation (worker cancel)
 };
@@ -149,6 +151,7 @@ export function optimizeThorough(config: Config, opts: ThoroughOpts = {}): Layou
     maxIterations = Infinity,
     seed = 0x5ca1ab1e,
     maxResults = 5,
+    rank,
     onProgress,
     shouldStop,
   } = opts;
@@ -158,7 +161,7 @@ export function optimizeThorough(config: Config, opts: ThoroughOpts = {}): Layou
 
   // Seed with the fast result — guarantees Thorough ≥ Fast.
   const byComposition = new Map<string, Layout>();
-  for (const l of optimizeVariants(config, maxResults)) {
+  for (const l of optimizeVariants(config, maxResults, rank)) {
     byComposition.set(compositionKey(l.placements), l);
   }
   if (valid.length === 0) return [...byComposition.values()];
@@ -174,8 +177,7 @@ export function optimizeThorough(config: Config, opts: ThoroughOpts = {}): Layou
     let variants = [...byComposition.values()];
     const nonEmpty = variants.filter((v) => v.placements.length > 0);
     if (nonEmpty.length > 0) variants = nonEmpty;
-    variants.sort((a, b) => b.totalPower - a.totalPower || a.panelCount - b.panelCount);
-    return variants.slice(0, maxResults);
+    return rankLayouts(variants, config.panelOptions, rank).slice(0, maxResults);
   };
   const bestPower = () => {
     let m = 0;

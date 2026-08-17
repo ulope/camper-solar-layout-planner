@@ -11,8 +11,8 @@ export function defaultConfig(): Config {
     gridSnap: 1,
     keepOuts: [{ id: 'hatch-1', label: 'Roof hatch', x: 120, y: 60, w: 50, h: 50 }],
     panelOptions: [
-      { id: 'panel-1', name: '100 W mono', width: 100, height: 50, power: 100 },
-      { id: 'panel-2', name: '175 W mono', width: 148, height: 67, power: 175 },
+      { id: 'panel-1', name: '100 W mono', width: 100, height: 50, power: 100, weight: 5.5, price: 89 },
+      { id: 'panel-2', name: '175 W mono', width: 148, height: 67, power: 175, weight: 9.5, price: 159 },
     ],
   };
 }

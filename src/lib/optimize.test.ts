@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { optimize, optimizeVariants, buildFreeRects, usableArea } from './optimize';
 import { overlaps, contains } from './geometry';
+import { layoutWeight, optionsById } from './ranking';
 import type { Config, PanelOption, Placement, Rect } from './types';
 import layout4 from './__fixtures__/solar-layout-4.json';
 
@@ -257,5 +258,28 @@ describe('optimizeVariants', () => {
       return [...counts.entries()].sort().toString();
     });
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('prefers a lighter composition inside the tolerance band', () => {
+    // Both models tile the 200x100 roof exactly 4 times: 'dense' gives 440 Wp at 40 kg,
+    // 'light' 400 Wp at 16 kg — 9.1% less power, so inside a 10% band.
+    const config = baseConfig({
+      panelOptions: [
+        { id: 'dense', name: 'dense', width: 100, height: 50, power: 110, weight: 10 },
+        { id: 'light', name: 'light', width: 100, height: 50, power: 100, weight: 4 },
+      ],
+    });
+    const byId = optionsById(config.panelOptions);
+
+    const plain = optimizeVariants(config);
+    expect(plain[0].totalPower).toBe(440);
+
+    const ranked = optimizeVariants(config, 5, { criteria: ['weight'], tolerance: 0.1 });
+    expect(layoutWeight(ranked[0], byId)).toBeLessThan(layoutWeight(plain[0], byId));
+    expect(ranked[0].totalPower).toBeGreaterThanOrEqual(plain[0].totalPower * 0.9);
+
+    // A tight band leaves the highest-Wp layout on top.
+    const strict = optimizeVariants(config, 5, { criteria: ['weight'], tolerance: 0.02 });
+    expect(strict[0].totalPower).toBe(440);
   });
 });

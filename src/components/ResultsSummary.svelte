@@ -1,7 +1,20 @@
 <script lang="ts">
-  import { config, layouts, selectedLayout } from '../lib/stores';
+  import { config, layouts, selectedLayout, rankOptions } from '../lib/stores';
   import { panelColor } from '../lib/colors';
+  import { CRITERION_LABELS, layoutPrice, layoutWeight, optionsById } from '../lib/ranking';
+  import { fmtArea, fmtPrice, fmtNum as fmtDec } from '../lib/format';
   import type { Layout } from '../lib/types';
+
+  const byId = $derived(optionsById($config.panelOptions));
+
+  // Totals for the optional weight / price fields — omitted when no placed model has them.
+  function extrasFor(l: Layout): string[] {
+    const kg = layoutWeight(l, byId);
+    const price = layoutPrice(l, byId);
+    return [kg > 0 ? `${fmtDec(kg)} kg` : null, price > 0 ? fmtPrice(price) : null].filter(
+      (s): s is string => s !== null,
+    );
+  }
 
   // Per-model breakdown for a given layout, ordered by panel Wp (highest first).
   // Color is taken from the option's original index so it matches the canvas.
@@ -44,8 +57,15 @@
       .sort((a, b) => b.wp - a.wp);
   }
 
-  const fmtArea = (cm2: number) => `${(cm2 / 10000).toFixed(2)} m²`;
   const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+  // With secondary criteria the top option is not necessarily the highest-Wp one, so
+  // spell out why it leads.
+  const criteriaNote = $derived(
+    $rankOptions.criteria.length > 0 && $layouts.length > 1
+      ? `Ranked by ${$rankOptions.criteria.map((c) => CRITERION_LABELS[c].toLowerCase()).join(', then ')} among layouts within ${Math.round($rankOptions.tolerance * 100)}% of the best Wp.`
+      : '',
+  );
 
   let hasResults = $derived($layouts.length > 0);
   let noFit = $derived($layouts.length > 0 && $layouts.every((l) => l.placements.length === 0));
@@ -65,6 +85,9 @@
     <p class="empty">No panels fit in the available area. Try smaller panels or a larger roof.</p>
   {:else}
     <p class="hint">Select an option to preview it on the roof.</p>
+    {#if criteriaNote}
+      <p class="criteria-note">{criteriaNote}</p>
+    {/if}
     {#each $layouts as l, i (i)}
       <button
         class="option"
@@ -81,6 +104,7 @@
         <div class="meta">
           {l.panelCount} panel{l.panelCount === 1 ? '' : 's'} · {Math.round(l.coverage * 100)}% coverage
           · {fmtArea(l.usedArea)}
+          {#each extrasFor(l) as extra (extra)}{' · ' + extra}{/each}
         </div>
         <div class="breakdown">
           {#each breakdownFor(l) as b (b.id)}
@@ -139,6 +163,12 @@
     color: var(--text-dim);
     font-size: 12px;
     margin: 0 0 10px;
+  }
+  .criteria-note {
+    color: var(--accent);
+    font-size: 11px;
+    line-height: 1.4;
+    margin: -4px 0 10px;
   }
   .option {
     display: block;

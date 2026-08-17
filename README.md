@@ -23,8 +23,9 @@ https://ulope.github.io/camper-solar-layout-planner/
 ## Usage Hints
 
 - The more panel options (esp. different shapes and sizes) you provide the "better" the result will be.
-  - I put "better" in quotes here since the optimizer currently only consideres Wp achieved. 
-    It doesn't take cost or number of MPPT controllers required into account.
+  - The optimizer maximizes Wp achieved. If you also fill in **weight** and **price** per model
+    you can add secondary criteria (see below) to break near-ties in favour of a lighter or
+    cheaper build. The number of MPPT controllers required is still not considered.
 - The `Fast` optimizer usually gives good results on simple layout
 - The `Thorough` one usually gives noticeably better results on complex layouts with many keep-out zones.
 - If you have the option, try moving the keep out zones and see if this gives better results
@@ -41,15 +42,24 @@ https://ulope.github.io/camper-solar-layout-planner/
   grid overlay at the coarser steps.
 - **Canvas** — rulers on both axes, a mouse-position crosshair with a live cm readout,
   and color-coded panels labeled with model name and Wp.
-- **Panel catalog** — any number of models (name, length, width, power in Wp). Optional
-  **voltage** and **current** per model enable a series/parallel wiring readout.
+- **Panel catalog** — any number of models (name, length, width, power in Wp), listed as
+  compact one-line entries; click one to edit it in a dialog. Optional **voltage** and
+  **current** enable a series/parallel wiring readout, and optional **weight** and
+  **price** feed the secondary optimization criteria.
 - **Optimizer** — selects and places panels to maximize total Wp. Panels may be rotated
-  90° and different models mixed. Two selectable effort levels:
+  90° and different models mixed. Effort and criteria live in the dropdown next to the
+  Optimize button. Two effort levels:
   - **Fast** — an instant, deterministic heuristic sweep (the default).
   - **Thorough** — a deeper ~5-second search that runs in a Web Worker with live
     progress and a Cancel button; never returns a worse result than Fast.
+- **Secondary criteria** *(optional)* — rank near-equal layouts by **weight**, **price**
+  and/or **number of distinct panel models used**, in a priority order you choose. Total
+  Wp remains the primary objective: only layouts within an adjustable **tolerance**
+  (default 10%) of the best result are reordered. Models missing a weight or price count
+  as zero for that criterion, and the picker says how many are missing.
 - **Results** — up to 5 distinct layout options, each showing total Wp, panel count,
-  coverage, used area, and a per-model breakdown ordered by Wp. When a model has voltage
+  coverage, used area, total weight/price when known, and a per-model breakdown ordered
+  by Wp. When a model has voltage
   and current set, the box also lists the **series** and **parallel** voltage/current for
   that many identical panels.
 - **Autosave** — the full configuration is saved to the Browser's `localStorage` and restored on reload.
@@ -75,8 +85,20 @@ removing panels from a random region and re-filling, plus a pass that upgrades p
 higher-power models that still fit. It streams its best layouts so a cancel keeps the
 best found so far.
 
-See `src/lib/packing.ts`, `src/lib/optimize.ts`, `src/lib/optimizeThorough.ts`, and
-`src/lib/optimizer.worker.ts`.
+Both effort levels keep the best layout of each distinct *panel composition* (the per-model
+counts), so the candidate pool holds genuinely different builds rather than reshuffles of
+the same one.
+
+**Secondary criteria** are applied to that pool after the search, never during it: the
+layouts within the tolerance band below the best total Wp are treated as equivalent and
+sorted by the selected criteria in priority order (each lower-is-better), with total Wp as
+the final tie-break. Layouts below the cutoff keep pure Wp order and always rank after the
+band, so a criterion can never promote a layout that gives up more power than allowed.
+Because each criterion depends only on a layout's composition, ranking the deduplicated
+pool is exact.
+
+See `src/lib/packing.ts`, `src/lib/optimize.ts`, `src/lib/optimizeThorough.ts`,
+`src/lib/ranking.ts`, and `src/lib/optimizer.worker.ts`.
 
 
 ## Development
