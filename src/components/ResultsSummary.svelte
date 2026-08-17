@@ -1,19 +1,51 @@
 <script lang="ts">
   import { config, layouts, selectedLayout, rankOptions } from '../lib/stores';
   import { panelColor } from '../lib/colors';
-  import { CRITERION_LABELS, layoutPrice, layoutWeight, optionsById } from '../lib/ranking';
+  import { CRITERION_LABELS, layoutFieldStat, optionsById } from '../lib/ranking';
   import { fmtArea, fmtPrice, fmtNum as fmtDec } from '../lib/format';
   import type { Layout } from '../lib/types';
 
   const byId = $derived(optionsById($config.panelOptions));
 
-  // Totals for the optional weight / price fields — omitted when no placed model has them.
-  function extrasFor(l: Layout): string[] {
-    const kg = layoutWeight(l, byId);
-    const price = layoutPrice(l, byId);
-    return [kg > 0 ? `${fmtDec(kg)} kg` : null, price > 0 ? fmtPrice(price) : null].filter(
-      (s): s is string => s !== null,
-    );
+  const FIELD_NAMES = { weight: 'weight', price: 'price' } as const;
+
+  /**
+   * Weight / price total for one option. Always renders: an em dash when no placed model
+   * carries the field, and a "≥" prefix when only some do, so a partial sum is never
+   * shown as if it were exact.
+   */
+  function statFor(l: Layout, field: 'weight' | 'price') {
+    const { total, missing, models } = layoutFieldStat(l, byId, field);
+    const name = FIELD_NAMES[field];
+    if (models === 0 || missing === models) {
+      return { text: '—', partial: false, title: `No placed model has a ${name}.` };
+    }
+    const value = field === 'weight' ? `${fmtDec(total)} kg` : fmtPrice(total);
+    if (missing === 0) return { text: value, partial: false, title: '' };
+    return {
+      text: `≥ ${value}`,
+      partial: true,
+      title: `${missing} of ${models} placed models have no ${name} — the total is a lower bound.`,
+    };
+  }
+
+  const anyPartial = $derived(
+    $layouts.some((l) => statFor(l, 'weight').partial || statFor(l, 'price').partial),
+  );
+
+  // Highest total Wp on screen. rankLayouts guarantees the power optimum is among the
+  // returned options, so this is the true optimum even when criteria reorder them.
+  const maxPower = $derived($layouts.reduce((m, l) => Math.max(m, l.totalPower), 0));
+  const showOffset = $derived($rankOptions.criteria.length > 0 && $layouts.length > 1);
+
+  /** How far an option sits below the power optimum, or null when it is the optimum. */
+  function offsetFor(l: Layout) {
+    if (!showOffset || maxPower <= 0 || l.totalPower >= maxPower) return null;
+    const absolute = maxPower - l.totalPower;
+    return {
+      pct: (absolute / maxPower) * 100,
+      title: `${Math.round(absolute)} Wp less than the highest-Wp option (${maxPower} Wp).`,
+    };
   }
 
   // Per-model breakdown for a given layout, ordered by panel Wp (highest first).
@@ -88,6 +120,9 @@
     {#if criteriaNote}
       <p class="criteria-note">{criteriaNote}</p>
     {/if}
+    {#if anyPartial}
+      <p class="partial-note">Totals marked ≥ exclude models with no weight or price.</p>
+    {/if}
     {#each $layouts as l, i (i)}
       <button
         class="option"
@@ -104,7 +139,23 @@
         <div class="meta">
           {l.panelCount} panel{l.panelCount === 1 ? '' : 's'} · {Math.round(l.coverage * 100)}% coverage
           · {fmtArea(l.usedArea)}
-          {#each extrasFor(l) as extra (extra)}{' · ' + extra}{/each}
+          {#if showOffset}
+            {@const off = offsetFor(l)}
+            {#if off}
+              <span class="offset" title={off.title}>· −{off.pct.toFixed(1)}% vs max Wp</span>
+            {:else}
+              <span class="maxtag" title="Highest total Wp of the computed options.">· max Wp</span>
+            {/if}
+          {/if}
+        </div>
+        <div class="totals">
+          {#each [{ field: 'weight', label: 'Weight' }, { field: 'price', label: 'Price' }] as const as s (s.field)}
+            {@const stat = statFor(l, s.field)}
+            <span class="tot">
+              <span class="tlabel">{s.label}</span>
+              <span class="tvalue" class:partial={stat.partial} title={stat.title}>{stat.text}</span>
+            </span>
+          {/each}
         </div>
         <div class="breakdown">
           {#each breakdownFor(l) as b (b.id)}
@@ -227,6 +278,52 @@
     font-size: 12px;
     color: var(--text-dim);
     margin-top: 3px;
+  }
+  .offset {
+    white-space: nowrap;
+  }
+  .maxtag {
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  /* Weight and price get their own row in a distinct color — as trailing meta text they
+     were indistinguishable from coverage and area. */
+  .totals {
+    /* Side by side when they fit; the second drops to its own line rather than letting a
+       value wrap mid-figure ("≥ 24.5 / kg") in a narrow panel. */
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 18px;
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px solid var(--border);
+  }
+  .tot {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  .tlabel {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+  }
+  .tvalue {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .tvalue.partial {
+    font-weight: 500;
+  }
+  .partial-note {
+    color: var(--text-dim);
+    font-size: 11px;
+    line-height: 1.4;
+    margin: -4px 0 10px;
   }
   .breakdown {
     display: flex;

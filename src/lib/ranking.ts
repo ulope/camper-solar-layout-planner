@@ -58,27 +58,58 @@ export const layoutWeight = (l: Layout, byId: Map<string, PanelOption>) =>
 export const layoutPrice = (l: Layout, byId: Map<string, PanelOption>) =>
   layoutMetric(l, byId, 'price');
 
+export type FieldStat = {
+  total: number; // sum over the placements, missing values counted as 0
+  missing: number; // distinct placed models without the field
+  models: number; // distinct placed models
+};
+
+/**
+ * Total for an optional field plus how complete the underlying data is, so the UI can
+ * tell "no data" from a partial sum. Counted per distinct *model* rather than per
+ * placement, so the figure matches what the catalog is missing.
+ */
+export function layoutFieldStat(
+  layout: Layout,
+  byId: Map<string, PanelOption>,
+  field: 'weight' | 'price',
+): FieldStat {
+  const ids = new Set(layout.placements.map((p) => p.optionId));
+  let missing = 0;
+  for (const id of ids) {
+    const value = byId.get(id)?.[field];
+    if (!(typeof value === 'number' && value > 0)) missing++;
+  }
+  return { total: layoutMetric(layout, byId, field), missing, models: ids.size };
+}
+
 /** The base ordering: most Wp first, ties broken toward fewer panels. */
 const byPower = (a: Layout, b: Layout) => b.totalPower - a.totalPower || a.panelCount - b.panelCount;
 
 /**
- * Order candidate layouts. Without criteria this is the plain "most Wp wins" sort.
+ * Order candidate layouts, keeping at most `max`. Without criteria this is the plain
+ * "most Wp wins" sort.
  *
  * With criteria, every layout within `tolerance` of the best total Wp is treated as
  * equivalent and that band is ordered by the criteria in priority order (each lower is
  * better), falling back to power. Layouts below the cutoff keep pure power order and
  * always rank after the band, so a secondary criterion can never promote a layout that
  * gives up more than the user allowed.
+ *
+ * The highest-Wp layout is always among the returned ones: when criteria push it beyond
+ * `max` it takes the last slot, so the results always include the raw power optimum to
+ * compare the criteria-preferred pick against.
  */
 export function rankLayouts(
   variants: Layout[],
   options: PanelOption[],
   rank?: RankOptions,
+  max = Infinity,
 ): Layout[] {
   const sorted = [...variants].sort(byPower);
   const criteria = rank?.criteria ?? [];
   const tolerance = rank?.tolerance ?? 0;
-  if (sorted.length < 2 || criteria.length === 0 || tolerance <= 0) return sorted;
+  if (sorted.length < 2 || criteria.length === 0 || tolerance <= 0) return sorted.slice(0, max);
 
   const cutoff = sorted[0].totalPower * (1 - tolerance);
   const band = sorted.filter((l) => l.totalPower >= cutoff - EPS);
@@ -98,5 +129,10 @@ export function rankLayouts(
     return byPower(a, b);
   });
 
-  return [...band, ...rest];
+  const ordered = [...band, ...rest];
+  if (ordered.length <= max) return ordered;
+
+  const kept = ordered.slice(0, max);
+  if (!kept.includes(sorted[0])) kept[kept.length - 1] = sorted[0];
+  return kept;
 }

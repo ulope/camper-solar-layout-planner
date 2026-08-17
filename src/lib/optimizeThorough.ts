@@ -177,7 +177,7 @@ export function optimizeThorough(config: Config, opts: ThoroughOpts = {}): Layou
     let variants = [...byComposition.values()];
     const nonEmpty = variants.filter((v) => v.placements.length > 0);
     if (nonEmpty.length > 0) variants = nonEmpty;
-    return rankLayouts(variants, config.panelOptions, rank).slice(0, maxResults);
+    return rankLayouts(variants, config.panelOptions, rank, maxResults);
   };
   const bestPower = () => {
     let m = 0;

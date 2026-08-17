@@ -58,8 +58,12 @@ https://ulope.github.io/camper-solar-layout-planner/
   (default 10%) of the best result are reordered. Models missing a weight or price count
   as zero for that criterion, and the picker says how many are missing.
 - **Results** — up to 5 distinct layout options, each showing total Wp, panel count,
-  coverage, used area, total weight/price when known, and a per-model breakdown ordered
-  by Wp. When a model has voltage
+  coverage, used area, **total weight and price**, and a per-model breakdown ordered
+  by Wp. A total is shown as `—` when no placed model carries that field and prefixed with
+  `≥` when only some do, so a partial sum is never presented as exact. With secondary
+  criteria active each option also states its **offset from the highest-Wp layout**
+  (e.g. `−7.4% vs max Wp`), and that layout is always among the options shown. When a
+  model has voltage
   and current set, the box also lists the **series** and **parallel** voltage/current for
   that many identical panels.
 - **Autosave** — the full configuration is saved to the Browser's `localStorage` and restored on reload.

@@ -236,7 +236,7 @@ export function optimizeVariants(config: Config, max = 5, rank?: RankOptions): L
   const nonEmpty = variants.filter((v) => v.placements.length > 0);
   if (nonEmpty.length > 0) variants = nonEmpty;
 
-  return rankLayouts(variants, config.panelOptions, rank).slice(0, max);
+  return rankLayouts(variants, config.panelOptions, rank, max);
 }
 
 /** Convenience: the single best layout (highest total Wp). */

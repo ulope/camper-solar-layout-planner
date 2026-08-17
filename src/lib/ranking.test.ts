@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { layoutMetric, layoutPrice, layoutWeight, optionsById, rankLayouts } from './ranking';
+import {
+  layoutFieldStat,
+  layoutMetric,
+  layoutPrice,
+  layoutWeight,
+  optionsById,
+  rankLayouts,
+} from './ranking';
 import type { Layout, PanelOption, Placement } from './types';
 
 const opt = (id: string, over: Partial<PanelOption> = {}): PanelOption => ({
@@ -81,6 +88,46 @@ describe('layoutMetric', () => {
     const empty = layoutOf([]);
     expect(layoutWeight(empty, byId)).toBe(0);
     expect(layoutMetric(empty, byId, 'panelTypes')).toBe(0);
+  });
+});
+
+describe('layoutFieldStat', () => {
+  const byId = optionsById(options);
+
+  it('reports a complete total', () => {
+    const l = layoutOf([
+      ['heavy', 100],
+      ['light', 90],
+    ]);
+    expect(layoutFieldStat(l, byId, 'weight')).toEqual({ total: 14, missing: 0, models: 2 });
+  });
+
+  it('counts missing models once, not once per placement', () => {
+    const l = layoutOf([
+      ['bare', 50],
+      ['bare', 50],
+      ['bare', 50],
+      ['heavy', 100],
+    ]);
+    expect(layoutFieldStat(l, byId, 'price')).toEqual({ total: 100, missing: 1, models: 2 });
+  });
+
+  it('marks a layout where no model carries the field', () => {
+    const l = layoutOf([
+      ['bare', 50],
+      ['bare', 50],
+    ]);
+    const stat = layoutFieldStat(l, byId, 'weight');
+    expect(stat).toEqual({ total: 0, missing: 1, models: 1 });
+    expect(stat.missing).toBe(stat.models); // the "—" case
+  });
+
+  it('is empty for a layout with no placements', () => {
+    expect(layoutFieldStat(layoutOf([]), byId, 'price')).toEqual({
+      total: 0,
+      missing: 0,
+      models: 0,
+    });
   });
 });
 
@@ -201,6 +248,50 @@ describe('rankLayouts', () => {
       tolerance: 0.1,
     });
     expect(ranked[0]).toBe(uniform);
+  });
+
+  it('caps the result at max, keeping the plain power order without criteria', () => {
+    const mid = layoutOf([
+      ['heavy', 100],
+      ['heavy', 90],
+    ]);
+    const ranked = rankLayouts([lighter, strong, mid], options, undefined, 2);
+    expect(ranked).toEqual([strong, lighter]);
+  });
+
+  it('keeps the highest-Wp layout even when criteria push it past max', () => {
+    // Four layouts inside a wide band; `strong` has the most Wp but is the heaviest, so
+    // criteria rank it last. It must still be present for the results to show the optimum.
+    const light1 = layoutOf([['light', 390]]); // 4 kg
+    const light2 = layoutOf([
+      ['light', 195],
+      ['light', 195],
+    ]); // 8 kg
+    const light3 = layoutOf([
+      ['light', 130],
+      ['light', 130],
+      ['light', 130],
+    ]); // 12 kg
+
+    const ranked = rankLayouts([light1, light2, light3, strong], options, {
+      criteria: ['weight'],
+      tolerance: 0.5,
+    });
+    expect(ranked).toEqual([light1, light2, light3, strong]); // strong is last by weight
+
+    const capped = rankLayouts([light1, light2, light3, strong], options, {
+      criteria: ['weight'],
+      tolerance: 0.5,
+    }, 3);
+    expect(capped).toHaveLength(3);
+    expect(capped).toContain(strong);
+    expect(capped[0]).toBe(light1); // criteria winner still leads
+    expect(Math.max(...capped.map((l) => l.totalPower))).toBe(strong.totalPower);
+  });
+
+  it('does not displace the power optimum when it already fits within max', () => {
+    const ranked = rankLayouts([strong, lighter], options, { criteria: ['weight'], tolerance: 0.1 }, 2);
+    expect(ranked).toEqual([lighter, strong]);
   });
 
   it('does not mutate the input array', () => {
