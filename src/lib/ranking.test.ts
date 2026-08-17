@@ -283,15 +283,83 @@ describe('rankLayouts', () => {
       criteria: ['weight'],
       tolerance: 0.5,
     }, 3);
-    expect(capped).toHaveLength(3);
-    expect(capped).toContain(strong);
-    expect(capped[0]).toBe(light1); // criteria winner still leads
+    // The optimum is appended as an extra entry rather than evicting a criteria-ranked
+    // option, so the cap yields max + 1 here.
+    expect(capped).toHaveLength(4);
+    expect(capped.slice(0, 3)).toEqual([light1, light2, light3]);
+    expect(capped[3]).toBe(strong);
     expect(Math.max(...capped.map((l) => l.totalPower))).toBe(strong.totalPower);
   });
 
   it('does not displace the power optimum when it already fits within max', () => {
     const ranked = rankLayouts([strong, lighter], options, { criteria: ['weight'], tolerance: 0.1 }, 2);
     expect(ranked).toEqual([lighter, strong]);
+  });
+
+  // Weight and price are continuous: requiring an exact tie meant a second criterion was
+  // never reached in practice. The tolerance defines the equivalence width at every level.
+  describe('tolerance tiers', () => {
+    const t1 = opt('t1', { weight: 5, price: 10 });
+    const t2 = opt('t2', { weight: 5.25, price: 10 });
+    const tierOptions = [t1, t2];
+
+    const twoTypes = layoutOf([
+      ['t1', 100],
+      ['t2', 100],
+    ]); // 200 Wp, 10.25 kg, 2 types — strictly lighter
+    const oneType = layoutOf([
+      ['t2', 100],
+      ['t2', 100],
+    ]); // 200 Wp, 10.50 kg, 1 type
+
+    it('lets a later criterion decide when the earlier one is within tolerance', () => {
+      const ranked = rankLayouts([twoTypes, oneType], tierOptions, {
+        criteria: ['weight', 'panelTypes'],
+        tolerance: 0.1,
+      });
+      // 10.50 kg is within 10% of 10.25 kg, so the type count decides.
+      expect(ranked[0]).toBe(oneType);
+    });
+
+    it('keeps the strictly better value when the gap exceeds the tolerance', () => {
+      const ranked = rankLayouts([twoTypes, oneType], tierOptions, {
+        criteria: ['weight', 'panelTypes'],
+        tolerance: 0.01,
+      });
+      // 10.50 kg is 2.4% heavier — outside a 1% tier, so weight alone decides.
+      expect(ranked[0]).toBe(twoTypes);
+    });
+
+    it('falls back to total Wp once the criteria are exhausted within a tier', () => {
+      const lighterWeaker = layoutOf([
+        ['t1', 115],
+        ['t1', 115],
+      ]); // 230 Wp, 10 kg
+      const heavierStronger = layoutOf([
+        ['t2', 120],
+        ['t2', 120],
+      ]); // 240 Wp, 10.5 kg
+      const ranked = rankLayouts([lighterWeaker, heavierStronger], tierOptions, {
+        criteria: ['weight'],
+        tolerance: 0.1,
+      });
+      // Both are within 10% on weight, so the primary objective breaks the tie: a single
+      // criterion no longer guarantees the strict minimum, it guarantees "within tolerance".
+      expect(ranked[0]).toBe(heavierStronger);
+    });
+
+    it('orders later tiers by the same rules', () => {
+      const heavyOneType = layoutOf([
+        ['t2', 60],
+        ['t2', 60],
+        ['t2', 60],
+      ]); // 180 Wp, 15.75 kg, 1 type — a tier below
+      const ranked = rankLayouts([twoTypes, oneType, heavyOneType], tierOptions, {
+        criteria: ['weight', 'panelTypes'],
+        tolerance: 0.1,
+      });
+      expect(ranked).toEqual([oneType, twoTypes, heavyOneType]);
+    });
   });
 
   it('does not mutate the input array', () => {

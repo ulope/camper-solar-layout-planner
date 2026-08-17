@@ -87,18 +87,65 @@ export function layoutFieldStat(
 const byPower = (a: Layout, b: Layout) => b.totalPower - a.totalPower || a.panelCount - b.panelCount;
 
 /**
+ * Order a set of layouts by the criteria in priority order, applying `tolerance` at every
+ * level rather than requiring an exact tie.
+ *
+ * The first criterion splits the set into a leading tier — everything within `tolerance`
+ * of the best value for it — and the remainder. The tier is then ordered by the *next*
+ * criterion under the same rule, and the remainder re-enters the same process to form the
+ * following tiers. Once the criteria run out, total Wp breaks the tie.
+ *
+ * Exact ties are the wrong hinge for these metrics: weight and price are continuous, so a
+ * strict lexicographic comparison means a second criterion is essentially never consulted
+ * (a real catalog produced 44 distinct weights across 56 candidate layouts). The tolerance
+ * the user already sets for Wp is the natural equivalence width here too, and at
+ * tolerance 0 this reduces exactly to lexicographic ordering.
+ *
+ * Tiers are peeled iteratively so recursion only goes as deep as the criteria list.
+ */
+function orderByCriteria(
+  layouts: Layout[],
+  criteria: SecondaryCriterion[],
+  tolerance: number,
+  byId: Map<string, PanelOption>,
+): Layout[] {
+  if (layouts.length < 2) return layouts;
+  if (criteria.length === 0) return [...layouts].sort(byPower);
+
+  const [first, ...rest] = criteria;
+  const out: Layout[] = [];
+  let remaining = layouts;
+
+  while (remaining.length > 0) {
+    const value = new Map(remaining.map((l) => [l, layoutMetric(l, byId, first)]));
+    let best = Infinity;
+    for (const v of value.values()) if (v < best) best = v;
+    const cutoff = best * (1 + tolerance);
+
+    const tier: Layout[] = [];
+    const others: Layout[] = [];
+    for (const l of remaining) (value.get(l)! <= cutoff + EPS ? tier : others).push(l);
+
+    for (const l of orderByCriteria(tier, rest, tolerance, byId)) out.push(l);
+    // `tier` always holds at least the minimum, so `remaining` strictly shrinks.
+    remaining = others;
+  }
+
+  return out;
+}
+
+/**
  * Order candidate layouts, keeping at most `max`. Without criteria this is the plain
  * "most Wp wins" sort.
  *
  * With criteria, every layout within `tolerance` of the best total Wp is treated as
- * equivalent and that band is ordered by the criteria in priority order (each lower is
- * better), falling back to power. Layouts below the cutoff keep pure power order and
- * always rank after the band, so a secondary criterion can never promote a layout that
- * gives up more than the user allowed.
+ * equivalent and that band is ordered by {@link orderByCriteria}. Layouts below the cutoff
+ * keep pure power order and always rank after the band, so a secondary criterion can never
+ * promote a layout that gives up more than the user allowed.
  *
  * The highest-Wp layout is always among the returned ones: when criteria push it beyond
- * `max` it takes the last slot, so the results always include the raw power optimum to
- * compare the criteria-preferred pick against.
+ * `max` it is appended as one extra entry (so up to `max + 1` come back), keeping the raw
+ * power optimum on screen to compare the criteria-preferred pick against.
  */
 export function rankLayouts(
   variants: Layout[],
@@ -116,23 +163,12 @@ export function rankLayouts(
   const rest = sorted.filter((l) => l.totalPower < cutoff - EPS);
 
   const byId = optionsById(options);
-  const metrics = new Map<Layout, number[]>(
-    band.map((l) => [l, criteria.map((c) => layoutMetric(l, byId, c))]),
-  );
-
-  band.sort((a, b) => {
-    const ma = metrics.get(a)!;
-    const mb = metrics.get(b)!;
-    for (let i = 0; i < criteria.length; i++) {
-      if (Math.abs(ma[i] - mb[i]) > EPS) return ma[i] - mb[i];
-    }
-    return byPower(a, b);
-  });
-
-  const ordered = [...band, ...rest];
+  const ordered = [...orderByCriteria(band, criteria, tolerance, byId), ...rest];
   if (ordered.length <= max) return ordered;
 
   const kept = ordered.slice(0, max);
-  if (!kept.includes(sorted[0])) kept[kept.length - 1] = sorted[0];
+  // Append rather than replace: evicting the last criteria-ranked option to make room
+  // would hide exactly the entries where a lower-priority criterion changes the outcome.
+  if (!kept.includes(sorted[0])) kept.push(sorted[0]);
   return kept;
 }

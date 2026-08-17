@@ -141,8 +141,9 @@
         </span>
       </label>
       <p class="note">
-        Total Wp still wins. Layouts within {tolerancePct}% of the best are treated as
-        equivalent and ordered by the criteria above.
+        Total Wp still wins. The tolerance applies at every level: layouts within
+        {tolerancePct}% of the best Wp are ranked by the first criterion, and those within
+        {tolerancePct}% of <em>its</em> best value are decided by the next.
       </p>
 
       {#each warnings as w (w.c)}
@@ -291,6 +292,10 @@
   }
   .pct {
     color: var(--text-dim);
+  }
+  .note em {
+    font-style: normal;
+    color: var(--text);
   }
   .note,
   .warn {

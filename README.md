@@ -54,10 +54,13 @@ https://ulope.github.io/camper-solar-layout-planner/
     progress and a Cancel button; never returns a worse result than Fast.
 - **Secondary criteria** *(optional)* — rank near-equal layouts by **weight**, **price**
   and/or **number of distinct panel models used**, in a priority order you choose. Total
-  Wp remains the primary objective: only layouts within an adjustable **tolerance**
-  (default 10%) of the best result are reordered. Models missing a weight or price count
-  as zero for that criterion, and the picker says how many are missing.
-- **Results** — up to 5 distinct layout options, each showing total Wp, panel count,
+  Wp remains the primary objective, and the adjustable **tolerance** (default 10%) applies
+  at every level: only layouts within it of the best Wp are reordered, and among those, a
+  later criterion decides between layouts within the tolerance of the earlier criterion's
+  best value. Models missing a weight or price count as zero for that criterion, and the
+  picker says how many are missing.
+- **Results** — up to 5 distinct layout options (plus the highest-Wp layout as an extra
+  entry when secondary criteria pushed it out of the top five), each showing total Wp, panel count,
   coverage, used area, **total weight and price**, and a per-model breakdown ordered
   by Wp. A total is shown as `—` when no placed model carries that field and prefixed with
   `≥` when only some do, so a partial sum is never presented as exact. With secondary
@@ -100,6 +103,16 @@ the final tie-break. Layouts below the cutoff keep pure Wp order and always rank
 band, so a criterion can never promote a layout that gives up more power than allowed.
 Because each criterion depends only on a layout's composition, ranking the deduplicated
 pool is exact.
+
+The tolerance is what makes a *second* criterion reachable. Weight and price are
+continuous, so demanding an exact tie before consulting the next criterion means it is
+essentially never consulted — one real catalog produced 44 distinct weights across 56
+candidate layouts. Instead each criterion peels off a tier: everything within the tolerance
+of its best value is ranked by the next criterion, the remainder forms the following tier
+under the same rule, and total Wp breaks the final tie. At tolerance 0 this reduces exactly
+to lexicographic ordering. One consequence worth knowing: a single criterion no longer
+guarantees the strict minimum — it guarantees "within the tolerance of the minimum, then
+the most Wp".
 
 See `src/lib/packing.ts`, `src/lib/optimize.ts`, `src/lib/optimizeThorough.ts`,
 `src/lib/ranking.ts`, and `src/lib/optimizer.worker.ts`.
