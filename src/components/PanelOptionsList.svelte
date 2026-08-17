@@ -1,26 +1,46 @@
 <script lang="ts">
-  import { config, addPanelOption, updatePanelOption, removePanelOption } from '../lib/stores';
+  import { config, removePanelOption } from '../lib/stores';
   import { panelColor } from '../lib/colors';
+  import { fmtNum, fmtPrice } from '../lib/format';
+  import type { PanelOption } from '../lib/types';
+  import PanelOptionModal from './PanelOptionModal.svelte';
 
-  function num(e: Event): number {
-    return Math.max(0, Number((e.target as HTMLInputElement).value) || 0);
+  let modalOpen = $state(false);
+  let editing = $state<PanelOption | null>(null);
+
+  function openAdd() {
+    editing = null;
+    modalOpen = true;
   }
 
-  // Optional numeric field: empty clears it (undefined), otherwise a non-negative number.
-  function optNum(e: Event): number | undefined {
-    const raw = (e.target as HTMLInputElement).value.trim();
-    if (raw === '') return undefined;
-    const n = Number(raw);
-    return Number.isFinite(n) && n >= 0 ? n : undefined;
+  function openEdit(opt: PanelOption) {
+    editing = opt;
+    modalOpen = true;
+  }
+
+  function remove(opt: PanelOption) {
+    if (confirm(`Remove the panel model “${opt.name}”?`)) removePanelOption(opt.id);
+  }
+
+  // Condensed one-line spec; optional fields are simply left out when unset.
+  function specOf(o: PanelOption): string {
+    return [
+      `${fmtNum(o.width)}×${fmtNum(o.height)} cm`,
+      `${fmtNum(o.power)} Wp`,
+      o.weight ? `${fmtNum(o.weight)} kg` : null,
+      o.price ? fmtPrice(o.price) : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
   }
 </script>
 
 <section class="card">
   <div class="head">
     <h2>Panel options</h2>
-    <button class="ghost" onclick={addPanelOption}>+ Add</button>
+    <button class="ghost" onclick={openAdd}>+ Add</button>
   </div>
-  <p class="hint">Candidate models the optimizer can choose from. V &amp; A are optional — fill both for series/parallel wiring figures.</p>
+  <p class="hint">Candidate models the optimizer can choose from. Click one to edit it.</p>
 
   {#if $config.panelOptions.length === 0}
     <p class="empty">No panel models yet. Add at least one.</p>
@@ -28,70 +48,24 @@
 
   {#each $config.panelOptions as opt, i (opt.id)}
     <div class="row">
-      <span class="swatch" style="background: {panelColor(i)}"></span>
-      <input
-        class="name"
-        type="text"
-        value={opt.name}
-        oninput={(e) => updatePanelOption(opt.id, { name: (e.target as HTMLInputElement).value })}
-      />
-      <button class="danger ghost del" title="Remove" onclick={() => removePanelOption(opt.id)}
-        >×</button
+      <button class="main" onclick={() => openEdit(opt)} title="Edit {opt.name}">
+        <span class="swatch" style="background: {panelColor(i)}"></span>
+        <span class="text">
+          <span class="name">{opt.name}</span>
+          <span class="spec">{specOf(opt)}</span>
+        </span>
+      </button>
+      <button
+        class="danger ghost del"
+        title="Remove {opt.name}"
+        aria-label="Remove {opt.name}"
+        onclick={() => remove(opt)}>×</button
       >
-      <div class="dims">
-        <label>
-          L
-          <input
-            type="number"
-            min="0"
-            value={opt.width}
-            oninput={(e) => updatePanelOption(opt.id, { width: num(e) })}
-          />
-        </label>
-        <label>
-          W
-          <input
-            type="number"
-            min="0"
-            value={opt.height}
-            oninput={(e) => updatePanelOption(opt.id, { height: num(e) })}
-          />
-        </label>
-        <label>
-          Wp
-          <input
-            type="number"
-            min="0"
-            value={opt.power}
-            oninput={(e) => updatePanelOption(opt.id, { power: num(e) })}
-          />
-        </label>
-        <label>
-          V
-          <input
-            type="number"
-            min="0"
-            placeholder="—"
-            title="Voltage (optional, e.g. Vmp)"
-            value={opt.voltage ?? ''}
-            oninput={(e) => updatePanelOption(opt.id, { voltage: optNum(e) })}
-          />
-        </label>
-        <label>
-          A
-          <input
-            type="number"
-            min="0"
-            placeholder="—"
-            title="Current (optional, e.g. Imp)"
-            value={opt.current ?? ''}
-            oninput={(e) => updatePanelOption(opt.id, { current: optNum(e) })}
-          />
-        </label>
-      </div>
     </div>
   {/each}
 </section>
+
+<PanelOptionModal bind:open={modalOpen} option={editing} />
 
 <style>
   .card {
@@ -121,36 +95,54 @@
   }
   .row {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: 1fr auto;
     align-items: center;
-    gap: 8px;
-    padding: 10px 0;
+    gap: 4px;
     border-top: 1px solid var(--border);
   }
+  .main {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-width: 0;
+    padding: 8px;
+    margin: 0 -8px 0 -8px;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+  }
+  .main:hover {
+    background: var(--panel-bg-2);
+  }
   .swatch {
-    width: 14px;
-    height: 14px;
+    flex: none;
+    width: 12px;
+    height: 12px;
     border-radius: 3px;
-    display: inline-block;
+  }
+  .text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
   }
   .name {
     font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .spec {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
   }
   .del {
     font-size: 18px;
     line-height: 1;
     padding: 2px 8px;
-  }
-  .dims {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 8px;
-  }
-  .dims label {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-bottom: 0;
+    border-color: transparent;
   }
 </style>

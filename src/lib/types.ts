@@ -12,6 +12,8 @@ export type PanelOption = {
   power: number; // Wp
   voltage?: number; // V (e.g. Vmp) — optional, enables series/parallel wiring readout
   current?: number; // A (e.g. Imp) — optional, paired with voltage
+  weight?: number; // kg — optional, used by the "lighter" optimization criterion
+  price?: number; // currency units — optional, used by the "cheaper" criterion
 };
 
 export type Config = {

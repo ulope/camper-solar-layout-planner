@@ -1,6 +1,7 @@
 import type { Config, Layout, Placement, PanelOption, Rect } from './types';
 import { insetRect, expandRect, subtractAll, area, isEmpty } from './geometry';
 import { packInOrder, splitFree, prune, type ModelCandidate, type FitRule } from './packing';
+import { rankLayouts, type RankOptions } from './ranking';
 
 function innerRect(config: Config): Rect {
   return insetRect({ x: 0, y: 0, w: config.roof.width, h: config.roof.height }, config.edgeMargin);
@@ -200,8 +201,11 @@ export function packGeometries(config: Config): Rect[][] {
  * {@link packGeometries}), keeps the first layout of each unique panel composition,
  * and returns up to `max` sorted by total Wp (ties broken toward fewer panels). The
  * number returned reflects how many genuinely different options exist.
+ *
+ * `rank` optionally re-orders the candidates by secondary criteria within a tolerance
+ * band of the best Wp (see {@link rankLayouts}); the search itself is unaffected.
  */
-export function optimizeVariants(config: Config, max = 5): Layout[] {
+export function optimizeVariants(config: Config, max = 5, rank?: RankOptions): Layout[] {
   const usable = usableArea(config);
   const valid = config.panelOptions.filter((o) => o.width > 0 && o.height > 0 && o.power > 0);
   if (valid.length === 0 || isEmpty(innerRect(config))) {
@@ -232,8 +236,7 @@ export function optimizeVariants(config: Config, max = 5): Layout[] {
   const nonEmpty = variants.filter((v) => v.placements.length > 0);
   if (nonEmpty.length > 0) variants = nonEmpty;
 
-  variants.sort((a, b) => b.totalPower - a.totalPower || a.panelCount - b.panelCount);
-  return variants.slice(0, max);
+  return rankLayouts(variants, config.panelOptions, rank, max);
 }
 
 /** Convenience: the single best layout (highest total Wp). */

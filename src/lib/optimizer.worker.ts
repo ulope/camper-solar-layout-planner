@@ -1,10 +1,11 @@
 /// <reference lib="webworker" />
 import type { Config } from './types';
 import { optimizeThorough } from './optimizeThorough';
+import type { RankOptions } from './ranking';
 
 declare const self: DedicatedWorkerGlobalScope;
 
-type RunMsg = { type: 'run'; config: Config; budgetMs: number; seed: number };
+type RunMsg = { type: 'run'; config: Config; budgetMs: number; seed: number; rank?: RankOptions };
 type CancelMsg = { type: 'cancel' };
 type InMsg = RunMsg | CancelMsg;
 
@@ -22,6 +23,7 @@ self.onmessage = (e: MessageEvent<InMsg>) => {
       budgetMs: msg.budgetMs,
       seed: msg.seed,
       maxResults: 5,
+      rank: msg.rank,
       onProgress: (p) => self.postMessage({ type: 'progress', ...p }),
       shouldStop: () => cancelled,
     });

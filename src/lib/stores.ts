@@ -3,10 +3,12 @@ import type { Config, Layout, KeepOut, PanelOption } from './types';
 import { loadConfig, saveConfig } from './persistence';
 import { optimizeVariants } from './optimize';
 import { optimizeThorough } from './optimizeThorough';
+import { ALL_CRITERIA, DEFAULT_RANK, type RankOptions, type SecondaryCriterion } from './ranking';
 
 /** How hard the optimizer searches. 'fast' is the instant sweep; 'thorough' runs ~5s. */
 export type OptimizerEffort = 'fast' | 'thorough';
 const EFFORT_KEY = 'camper-solar-layout:effort:v1';
+const RANK_KEY = 'camper-solar-layout:rank:v1';
 const THOROUGH_BUDGET_MS = 5000;
 const THOROUGH_SEED = 0x5ca1ab1e;
 
@@ -15,6 +17,24 @@ function loadEffort(): OptimizerEffort {
     return localStorage.getItem(EFFORT_KEY) === 'thorough' ? 'thorough' : 'fast';
   } catch {
     return 'fast';
+  }
+}
+
+function loadRankOptions(): RankOptions {
+  try {
+    const raw = localStorage.getItem(RANK_KEY);
+    if (!raw) return DEFAULT_RANK;
+    const parsed = JSON.parse(raw) as Partial<RankOptions>;
+    const criteria = Array.isArray(parsed.criteria)
+      ? parsed.criteria.filter((c): c is SecondaryCriterion => ALL_CRITERIA.includes(c))
+      : [];
+    const tolerance =
+      typeof parsed.tolerance === 'number' && parsed.tolerance >= 0 && parsed.tolerance <= 1
+        ? parsed.tolerance
+        : DEFAULT_RANK.tolerance;
+    return { criteria: [...new Set(criteria)], tolerance };
+  } catch {
+    return DEFAULT_RANK;
   }
 }
 
@@ -48,6 +68,30 @@ optimizerEffort.subscribe((e) => {
     // best-effort
   }
 });
+
+/**
+ * Optional secondary ranking criteria + tolerance band, persisted separately from the
+ * layout config. Changing them marks the layouts stale so the Optimize button pulses.
+ */
+export const rankOptions = writable<RankOptions>(loadRankOptions());
+rankOptions.subscribe((r) => {
+  layoutStale.set(true);
+  try {
+    localStorage.setItem(RANK_KEY, JSON.stringify(r));
+  } catch {
+    // best-effort
+  }
+});
+
+/**
+ * How many panel models are missing each optional field, so the criteria picker can warn
+ * that a selected criterion is counting missing values as 0.
+ */
+export const panelDataGaps = derived(config, ($c) => ({
+  total: $c.panelOptions.length,
+  weight: $c.panelOptions.filter((p) => !(typeof p.weight === 'number' && p.weight > 0)).length,
+  price: $c.panelOptions.filter((p) => !(typeof p.price === 'number' && p.price > 0)).length,
+}));
 
 /** True while a thorough (worker) optimization is running. */
 export const optimizing = writable<boolean>(false);
@@ -88,7 +132,7 @@ export function runOptimize(): void {
   if (get(optimizerEffort) === 'fast') {
     disposeWorker();
     optimizing.set(false);
-    applyResults(optimizeVariants(get(config)));
+    applyResults(optimizeVariants(get(config), 5, get(rankOptions)));
     return;
   }
   runThorough();
@@ -98,6 +142,7 @@ export function runOptimize(): void {
 function runThorough(): void {
   disposeWorker();
   const cfg = get(config);
+  const rank = get(rankOptions);
   streamedLayouts = [];
   optimizeProgress.set({ bestPower: 0, elapsedMs: 0 });
   optimizing.set(true);
@@ -110,7 +155,9 @@ function runThorough(): void {
 
   if (!worker) {
     // No worker support: run synchronously (blocks, but still produces a result).
-    applyResults(optimizeThorough(cfg, { budgetMs: THOROUGH_BUDGET_MS, seed: THOROUGH_SEED }));
+    applyResults(
+      optimizeThorough(cfg, { budgetMs: THOROUGH_BUDGET_MS, seed: THOROUGH_SEED, rank }),
+    );
     optimizing.set(false);
     return;
   }
@@ -126,7 +173,13 @@ function runThorough(): void {
       disposeWorker();
     }
   };
-  worker.postMessage({ type: 'run', config: cfg, budgetMs: THOROUGH_BUDGET_MS, seed: THOROUGH_SEED });
+  worker.postMessage({
+    type: 'run',
+    config: cfg,
+    budgetMs: THOROUGH_BUDGET_MS,
+    seed: THOROUGH_SEED,
+    rank,
+  });
 }
 
 /**
@@ -158,14 +211,11 @@ function makeId(prefix: string): string {
 
 // ----- Mutation helpers (keep components thin) -----
 
-export function addPanelOption(): void {
-  config.update((c) => ({
-    ...c,
-    panelOptions: [
-      ...c.panelOptions,
-      { id: makeId('panel'), name: 'New panel', width: 100, height: 50, power: 100 },
-    ],
-  }));
+/** Append a panel model and return its new id. */
+export function addPanelOption(init: Omit<PanelOption, 'id'>): string {
+  const id = makeId('panel');
+  config.update((c) => ({ ...c, panelOptions: [...c.panelOptions, { ...init, id }] }));
+  return id;
 }
 
 export function updatePanelOption(id: string, patch: Partial<PanelOption>): void {
