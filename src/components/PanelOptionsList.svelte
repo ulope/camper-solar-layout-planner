@@ -22,6 +22,16 @@
     if (confirm(`Remove the panel model “${opt.name}”?`)) removePanelOption(opt.id);
   }
 
+  // Displayed alphabetically, but each row keeps its option's index in the stored
+  // list so the swatch matches the canvas and the results breakdown. Numeric-aware
+  // so "Model 2" sorts before "Model 10".
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  const sorted = $derived(
+    $config.panelOptions
+      .map((opt, i) => ({ opt, i }))
+      .sort((a, b) => collator.compare(a.opt.name, b.opt.name)),
+  );
+
   // Condensed one-line spec; optional fields are simply left out when unset.
   function specOf(o: PanelOption): string {
     return [
@@ -46,7 +56,7 @@
     <p class="empty">No panel models yet. Add at least one.</p>
   {/if}
 
-  {#each $config.panelOptions as opt, i (opt.id)}
+  {#each sorted as { opt, i } (opt.id)}
     <div class="row">
       <button class="main" onclick={() => openEdit(opt)} title="Edit {opt.name}">
         <span class="swatch" style="background: {panelColor(i)}"></span>
