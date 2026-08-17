@@ -2,6 +2,7 @@ import type { Config, Layout, Placement, PanelOption, Rect } from './types';
 import { insetRect, expandRect, subtractAll, area, isEmpty } from './geometry';
 import { packInOrder, splitFree, prune, type ModelCandidate, type FitRule } from './packing';
 import { rankLayouts, type RankOptions } from './ranking';
+import { packablePanels } from './panels';
 
 function innerRect(config: Config): Rect {
   return insetRect({ x: 0, y: 0, w: config.roof.width, h: config.roof.height }, config.edgeMargin);
@@ -107,7 +108,7 @@ const SORT_KEYS: SortKey[] = [
  *    adding an option can interleave it mid-sequence and *lower* the best result.
  */
 function buildOrderings(options: PanelOption[]): PanelOption[][] {
-  const valid = options.filter((o) => o.width > 0 && o.height > 0 && o.power > 0);
+  const valid = packablePanels(options);
   if (valid.length === 0) return [];
 
   const lists: PanelOption[][] = [];
@@ -207,7 +208,7 @@ export function packGeometries(config: Config): Rect[][] {
  */
 export function optimizeVariants(config: Config, max = 5, rank?: RankOptions): Layout[] {
   const usable = usableArea(config);
-  const valid = config.panelOptions.filter((o) => o.width > 0 && o.height > 0 && o.power > 0);
+  const valid = packablePanels(config.panelOptions);
   if (valid.length === 0 || isEmpty(innerRect(config))) {
     return [summarize([], usable)];
   }

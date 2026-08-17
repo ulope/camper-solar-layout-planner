@@ -167,6 +167,31 @@ describe('optimize', () => {
     expectNoOverlaps(layout.placements);
   });
 
+  it('never places a deselected model, even when it would win', () => {
+    // Same mix as above, where B alone reaches 400 Wp. Deselecting B must fall
+    // back to A's 300 Wp rather than quietly using the better model.
+    const layout = optimize(
+      baseConfig({
+        panelOptions: [panel('A', 100, 100, 150), { ...panel('B', 50, 50, 50), enabled: false }],
+      }),
+    );
+    expect(layout.placements.every((p) => p.optionId === 'A')).toBe(true);
+    expect(layout.totalPower).toBe(300);
+  });
+
+  it('returns an empty layout when every model is deselected', () => {
+    const layout = optimize(
+      baseConfig({ panelOptions: [{ ...panel('p', 100, 100, 100), enabled: false }] }),
+    );
+    expect(layout.placements).toEqual([]);
+    expect(layout.totalPower).toBe(0);
+  });
+
+  it('treats a model with no enabled flag as selected', () => {
+    const layout = optimize(baseConfig({ panelOptions: [panel('p', 100, 100, 100)] }));
+    expect(layout.placements.length).toBe(2);
+  });
+
   it('is deterministic across runs', () => {
     const config = baseConfig({
       panelGap: 1,

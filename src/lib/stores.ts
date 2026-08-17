@@ -4,6 +4,7 @@ import { loadConfig, saveConfig } from './persistence';
 import { optimizeVariants } from './optimize';
 import { optimizeThorough } from './optimizeThorough';
 import { ALL_CRITERIA, DEFAULT_RANK, type RankOptions, type SecondaryCriterion } from './ranking';
+import { isPanelEnabled } from './panels';
 
 /** How hard the optimizer searches. 'fast' is the instant sweep; 'thorough' runs ~5s. */
 export type OptimizerEffort = 'fast' | 'thorough';
@@ -85,13 +86,17 @@ rankOptions.subscribe((r) => {
 
 /**
  * How many panel models are missing each optional field, so the criteria picker can warn
- * that a selected criterion is counting missing values as 0.
+ * that a selected criterion is counting missing values as 0. Only selected models count —
+ * a deselected one is never placed, so its gaps cannot skew a ranking.
  */
-export const panelDataGaps = derived(config, ($c) => ({
-  total: $c.panelOptions.length,
-  weight: $c.panelOptions.filter((p) => !(typeof p.weight === 'number' && p.weight > 0)).length,
-  price: $c.panelOptions.filter((p) => !(typeof p.price === 'number' && p.price > 0)).length,
-}));
+export const panelDataGaps = derived(config, ($c) => {
+  const active = $c.panelOptions.filter(isPanelEnabled);
+  return {
+    total: active.length,
+    weight: active.filter((p) => !(typeof p.weight === 'number' && p.weight > 0)).length,
+    price: active.filter((p) => !(typeof p.price === 'number' && p.price > 0)).length,
+  };
+});
 
 /** True while a thorough (worker) optimization is running. */
 export const optimizing = writable<boolean>(false);
@@ -223,6 +228,11 @@ export function updatePanelOption(id: string, patch: Partial<PanelOption>): void
     ...c,
     panelOptions: c.panelOptions.map((p) => (p.id === id ? { ...p, ...patch } : p)),
   }));
+}
+
+/** Include or exclude a model from optimization without deleting it. */
+export function setPanelEnabled(id: string, enabled: boolean): void {
+  updatePanelOption(id, { enabled });
 }
 
 export function removePanelOption(id: string): void {
