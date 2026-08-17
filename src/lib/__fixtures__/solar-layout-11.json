@@ -1,0 +1,462 @@
+{
+  "gridSnap": 1,
+  "roof": {
+    "width": 400,
+    "height": 175
+  },
+  "edgeMargin": 0,
+  "panelGap": 0,
+  "keepOuts": [
+    {
+      "id": "keepout-mqhxioii-1",
+      "label": "Fenster 1",
+      "x": 162,
+      "y": 15,
+      "w": 60,
+      "h": 81
+    },
+    {
+      "id": "keepout-msxmeru9-11",
+      "label": "Steg 1",
+      "x": 0,
+      "y": 0,
+      "w": 237,
+      "h": 15
+    },
+    {
+      "id": "keepout-msxmfafo-12",
+      "label": "Steg 2",
+      "x": 224,
+      "y": 160,
+      "w": 176,
+      "h": 15
+    },
+    {
+      "id": "keepout-msxmgr94-13",
+      "label": "Fan",
+      "x": 358,
+      "y": 135,
+      "w": 20,
+      "h": 20
+    },
+    {
+      "id": "keepout-msxst74y-3",
+      "label": "Steg 3",
+      "x": 223,
+      "y": 15,
+      "w": 15,
+      "h": 145
+    }
+  ],
+  "panelOptions": [
+    {
+      "id": "panel-1",
+      "name": "Wattstunde Sola Frame Black 80",
+      "width": 27.5,
+      "height": 153,
+      "power": 80,
+      "voltage": 24.6,
+      "current": 3.25,
+      "weight": 4.6,
+      "price": 100
+    },
+    {
+      "id": "panel-mqfs2ano-1",
+      "name": "Wattstunde Sola Frame Black 100 HV",
+      "width": 43,
+      "height": 120,
+      "power": 100,
+      "voltage": 39.2,
+      "current": 2.56,
+      "weight": 5.5,
+      "price": 133.61
+    },
+    {
+      "id": "panel-mqfs2vfs-2",
+      "name": "Wattstunde Sola Frame Black 120",
+      "width": 53,
+      "height": 104,
+      "power": 120,
+      "voltage": 16.8,
+      "current": 7.15,
+      "weight": 5.9,
+      "price": 142
+    },
+    {
+      "id": "panel-mqfs5jst-5",
+      "name": "Wattstunde Sola Frame Black 175",
+      "width": 55.5,
+      "height": 154.6,
+      "power": 175,
+      "voltage": 25.2,
+      "current": 6.95,
+      "weight": 8.8,
+      "price": 192
+    },
+    {
+      "id": "panel-mqfs6txf-7",
+      "name": "Wattstunde Sola Frame Black 205",
+      "width": 65.8,
+      "height": 154.6,
+      "power": 205,
+      "voltage": 25.2,
+      "current": 8.14,
+      "weight": 10.3,
+      "price": 234
+    },
+    {
+      "id": "panel-mqftyyuf-1",
+      "name": "Tigerexped black tiger PRO 125",
+      "width": 40,
+      "height": 147,
+      "power": 125,
+      "voltage": 38.07,
+      "current": 3.3,
+      "weight": 7,
+      "price": 290
+    },
+    {
+      "id": "panel-mqfu09hf-2",
+      "name": "Tigerexped black tiger PRO 150",
+      "width": 53,
+      "height": 130.5,
+      "power": 150,
+      "voltage": 38.07,
+      "current": 4.01,
+      "weight": 8.1,
+      "price": 330
+    },
+    {
+      "id": "panel-mqfu0rpv-3",
+      "name": "Tigerexped black tiger PRO 180",
+      "width": 70,
+      "height": 119,
+      "power": 180,
+      "voltage": 35.53,
+      "current": 5.3,
+      "weight": 9.7,
+      "price": 380
+    },
+    {
+      "id": "panel-mqfu1ggl-4",
+      "name": "Tigerexped black tiger PRO 185",
+      "width": 77,
+      "height": 108,
+      "power": 185,
+      "voltage": 35.53,
+      "current": 5.28,
+      "weight": 9.4,
+      "price": 390
+    },
+    {
+      "id": "panel-mqfytmhw-1",
+      "name": "Fritz Berger PX 70",
+      "width": 36.4,
+      "height": 113,
+      "power": 70,
+      "voltage": 20.81,
+      "current": 3.34,
+      "weight": 4.1,
+      "price": 50
+    },
+    {
+      "id": "panel-mqfyudr0-2",
+      "name": "Fritz Berger PX 85",
+      "width": 45.2,
+      "height": 102.3,
+      "power": 85,
+      "voltage": 20.59,
+      "current": 3.34,
+      "weight": 5.2,
+      "price": 60
+    },
+    {
+      "id": "panel-mqfyv8ca-3",
+      "name": "Fritz Berger PX 100",
+      "width": 45.2,
+      "height": 119.5,
+      "power": 100,
+      "voltage": 18.24,
+      "current": 4.41,
+      "weight": 5.2,
+      "price": 130
+    },
+    {
+      "id": "panel-mqfyw02h-4",
+      "name": "Fritz Berger PX 150",
+      "width": 55,
+      "height": 157,
+      "power": 150,
+      "voltage": 29.73,
+      "current": 5.03,
+      "weight": 8.7,
+      "price": 160
+    },
+    {
+      "id": "panel-mqfz5h8y-5",
+      "name": "Obelink Blackline 80",
+      "width": 46,
+      "height": 97,
+      "power": 80,
+      "voltage": 19.5,
+      "current": 4.4,
+      "weight": 4.9,
+      "price": 99
+    },
+    {
+      "id": "panel-mqfzf9y4-8",
+      "name": "Ective BSP 100C Lightweight",
+      "width": 69.5,
+      "height": 69.5,
+      "power": 100,
+      "voltage": 18,
+      "current": 5.56,
+      "weight": 2.24,
+      "price": 192
+    },
+    {
+      "name": "Wattstunde Sola Frame Shadow 80",
+      "width": 35,
+      "height": 114.5,
+      "power": 80,
+      "weight": 4.3,
+      "price": 167,
+      "voltage": 31.2,
+      "current": 2.58,
+      "id": "panel-msxkyudv-1"
+    },
+    {
+      "name": "Wattstunde Sola Frame Shadow 120",
+      "width": 54.4,
+      "height": 105,
+      "power": 120,
+      "weight": 6.1,
+      "price": 234,
+      "voltage": 30.6,
+      "current": 3.93,
+      "id": "panel-msxl0ef0-2"
+    },
+    {
+      "name": "Wattstunde Sola Frame Shadow 125",
+      "width": 39.2,
+      "height": 156,
+      "power": 125,
+      "weight": 6.5,
+      "price": 242.86,
+      "voltage": 31.2,
+      "current": 4.04,
+      "id": "panel-msxl1sei-3"
+    },
+    {
+      "name": "Wattstunde Sola Frame Shadow 150",
+      "width": 51,
+      "height": 142.5,
+      "power": 150,
+      "weight": 7.7,
+      "price": 293,
+      "voltage": 30.6,
+      "current": 4.93,
+      "id": "panel-msxl30ms-4"
+    },
+    {
+      "name": "Wattstunde Sola Frame Shadow 175",
+      "width": 72,
+      "height": 117,
+      "power": 175,
+      "weight": 8.7,
+      "price": 318.5,
+      "voltage": 31.2,
+      "current": 5.61,
+      "id": "panel-msxl45p1-5"
+    },
+    {
+      "name": "Wattstunde Sola Frame Shadow 220",
+      "width": 76.5,
+      "height": 138.5,
+      "power": 220,
+      "weight": 11.4,
+      "price": 402,
+      "voltage": 30,
+      "current": 7.37,
+      "id": "panel-msxl58o8-6"
+    },
+    {
+      "name": "AIKO Solar 440W Nebular 2P",
+      "width": 113.4,
+      "height": 176.2,
+      "power": 440,
+      "weight": 8.6,
+      "price": 140,
+      "voltage": 34.23,
+      "current": 12.86,
+      "id": "panel-msxlorry-7"
+    },
+    {
+      "name": "Obelink Blackline 100",
+      "width": 46,
+      "height": 120,
+      "power": 100,
+      "weight": 6,
+      "price": 119,
+      "voltage": 19.5,
+      "current": 5.5,
+      "id": "panel-msxlytkn-8"
+    },
+    {
+      "name": "Obelink Blackline 140",
+      "width": 67,
+      "height": 111,
+      "power": 140,
+      "weight": 8.1,
+      "price": 139,
+      "voltage": 19.5,
+      "current": 7.7,
+      "id": "panel-msxm02i8-9"
+    },
+    {
+      "name": "Obelink Blackline 180",
+      "width": 67,
+      "height": 144,
+      "power": 180,
+      "weight": 10.5,
+      "price": 159,
+      "voltage": 19.5,
+      "current": 9.9,
+      "id": "panel-msxm0zim-10"
+    },
+    {
+      "name": "Ective BSP 120 Lightweight",
+      "width": 53,
+      "height": 117,
+      "power": 120,
+      "weight": 2.4,
+      "price": 209,
+      "voltage": 21,
+      "current": 5.71,
+      "id": "panel-msxn1k3q-1"
+    },
+    {
+      "name": "Ective BSP 170 Lightweight",
+      "width": 53,
+      "height": 154,
+      "power": 170,
+      "weight": 3.48,
+      "price": 293,
+      "voltage": 30,
+      "current": 5.56,
+      "id": "panel-msxn38qz-2"
+    },
+    {
+      "name": "Ective BSP 80 Lightweight",
+      "width": 36,
+      "height": 96,
+      "power": 80,
+      "weight": 1.92,
+      "price": 142,
+      "voltage": 18,
+      "current": 4.4,
+      "id": "panel-msxn4fut-3"
+    },
+    {
+      "name": "Ja Solar 500W Bifazial JAM60D41",
+      "width": 113.4,
+      "height": 195.3,
+      "power": 500,
+      "weight": 27.3,
+      "price": 78,
+      "voltage": 37.11,
+      "current": 13.61,
+      "id": "panel-msxnji96-1"
+    },
+    {
+      "name": "JA Solar 455W Bifazial JAM54D41",
+      "width": 113.4,
+      "height": 176.2,
+      "power": 455,
+      "weight": 22,
+      "price": 71,
+      "voltage": 33,
+      "current": 13.79,
+      "id": "panel-msxo5rls-2"
+    },
+    {
+      "name": "Sola Frame Black 120 HV",
+      "width": 43,
+      "height": 139.5,
+      "power": 120,
+      "weight": 6.3,
+      "price": 170,
+      "voltage": 44.8,
+      "current": 2.68,
+      "id": "panel-msxt6jgk-4"
+    },
+    {
+      "name": "FDS050-12M-50Wp",
+      "width": 40,
+      "height": 74,
+      "power": 50,
+      "weight": 3.1,
+      "price": 33,
+      "voltage": 18.7,
+      "current": 2.68,
+      "id": "panel-msxue97l-5",
+      "enabled": false
+    },
+    {
+      "name": "offgridtec Mono 10",
+      "width": 23,
+      "height": 37,
+      "power": 10,
+      "weight": 1.3,
+      "voltage": 20,
+      "current": 0.5,
+      "id": "panel-msxui6yc-7",
+      "enabled": false
+    },
+    {
+      "name": "offgridtec Mono 20",
+      "width": 36,
+      "height": 42,
+      "power": 20,
+      "weight": 1.8,
+      "voltage": 20,
+      "current": 1,
+      "id": "panel-msxuj2ln-8",
+      "enabled": false
+    },
+    {
+      "name": "offgridtec Mono 30",
+      "width": 36,
+      "height": 56,
+      "power": 30,
+      "weight": 3,
+      "voltage": 20,
+      "current": 1.5,
+      "id": "panel-msxum3ug-9",
+      "enabled": false
+    },
+    {
+      "name": "offgridtec Mono 50",
+      "width": 52,
+      "height": 55,
+      "power": 50,
+      "weight": 3.7,
+      "voltage": 20,
+      "current": 2.5,
+      "id": "panel-msxumot4-10",
+      "enabled": false
+    },
+    {
+      "name": "Seraphim 50",
+      "width": 49,
+      "height": 53,
+      "power": 50,
+      "weight": 3.5,
+      "price": 60,
+      "voltage": 37.6,
+      "current": 1.33,
+      "id": "panel-msxuxq2c-11",
+      "enabled": false
+    }
+  ]
+}
