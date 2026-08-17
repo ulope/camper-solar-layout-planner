@@ -4,6 +4,7 @@ import { optimizeThorough } from './optimizeThorough';
 import { overlaps, contains } from './geometry';
 import type { Config, PanelOption, Placement, Rect } from './types';
 import layout4 from './__fixtures__/solar-layout-4.json';
+import layout11 from './__fixtures__/solar-layout-11.json';
 
 const panel = (id: string, width: number, height: number, power: number): PanelOption => ({
   id,
@@ -109,6 +110,28 @@ describe('optimizeThorough', () => {
       const fast = optimize(cfg).totalPower;
       const best = optimizeThorough(cfg, { maxIterations: 40, budgetMs: Infinity, seed: 7 })[0];
       expect(best.totalPower).toBeGreaterThanOrEqual(fast);
+      expectNoOverlaps(best.placements);
+      for (const p of best.placements) {
+        expect(contains({ x: 0, y: 0, w: cfg.roof.width, h: cfg.roof.height }, bodyRect(p))).toBe(true);
+        for (const k of cfg.keepOuts) expect(overlaps(bodyRect(p), k)).toBe(false);
+      }
+    }
+  });
+
+  it('stays strong under small config changes (layout-11 regression)', { timeout: 60000 }, () => {
+    // Moving a keep-out 1cm (into *more* room) or enabling an extra small panel
+    // model used to visibly drop the best result. All three variants must reach
+    // the best power known for this roof.
+    const scenarios: ((c: Config) => void)[] = [
+      () => {},
+      (c) => void (c.keepOuts.find((k) => k.label === 'Fenster 1')!.x += 1),
+      (c) => void (c.panelOptions.find((p) => p.name === 'FDS050-12M-50Wp')!.enabled = true),
+    ];
+    for (const mutate of scenarios) {
+      const cfg = JSON.parse(JSON.stringify(layout11)) as Config;
+      mutate(cfg);
+      const best = optimizeThorough(cfg, { maxIterations: 800, budgetMs: Infinity, seed: 12345 })[0];
+      expect(best.totalPower).toBeGreaterThanOrEqual(1140);
       expectNoOverlaps(best.placements);
       for (const p of best.placements) {
         expect(contains({ x: 0, y: 0, w: cfg.roof.width, h: cfg.roof.height }, bodyRect(p))).toBe(true);

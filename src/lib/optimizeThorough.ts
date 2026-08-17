@@ -57,7 +57,9 @@ function freeAround(geom: Rect[], survivors: Placement[], gap: number): Rect[] {
 /**
  * Ruin-and-recreate hill climb: repeatedly remove the panels intersecting a random
  * sub-rectangle, rebuild the free space from the survivors, and re-fill with a fresh
- * randomized greedy pass. Keeps a change only when it raises total Wp.
+ * randomized greedy pass. Walks plateaus (a candidate matching the current power is
+ * accepted as the new starting point, so equal-Wp rearrangements can unlock later
+ * gains) but only ever returns the highest-Wp layout seen.
  */
 function localSearch(
   start: Placement[],
@@ -65,21 +67,24 @@ function localSearch(
   valid: PanelOption[],
   config: Config,
   rng: () => number,
+  steps: number,
 ): Placement[] {
   const gap = config.panelGap;
   const roof = config.roof;
+  let current = start;
+  let currentPower = totalPower(current);
   let best = start;
-  let bestPower = totalPower(best);
+  let bestPower = currentPower;
 
-  for (let step = 0; step < 4; step++) {
+  for (let step = 0; step < steps; step++) {
     const ruin: Rect = {
       x: rng() * roof.width,
       y: rng() * roof.height,
       w: (0.2 + rng() * 0.5) * roof.width,
       h: (0.2 + rng() * 0.5) * roof.height,
     };
-    const survivors = best.filter((p) => !overlaps({ x: p.x, y: p.y, w: p.w, h: p.h }, ruin));
-    if (survivors.length === best.length) continue; // nothing removed
+    const survivors = current.filter((p) => !overlaps({ x: p.x, y: p.y, w: p.w, h: p.h }, ruin));
+    if (survivors.length === current.length) continue; // nothing removed
 
     const free = freeAround(geom, survivors, gap);
     const mode = MODES[Math.floor(rng() * MODES.length)];
@@ -89,6 +94,10 @@ function localSearch(
 
     const candidate = [...survivors, ...refill];
     const power = totalPower(candidate);
+    if (power >= currentPower - EPS) {
+      current = candidate;
+      currentPower = power;
+    }
     if (power > bestPower + EPS) {
       best = candidate;
       bestPower = power;
@@ -139,12 +148,34 @@ function upgradePass(placements: Placement[], valid: PanelOption[], gap: number)
   });
 }
 
+// Elite pool: the best distinct-composition layouts an island has found so far,
+// exploited by that island's intensification iterations.
+const ELITE_MAX = 4;
+// Independent search trajectories ("islands"), each with its own elite pool. All
+// islands share the global result set, but climbing only within their own pool
+// keeps one unlucky early basin from capturing the entire search.
+const ISLANDS = 2;
+
 /**
  * Stronger, time-budgeted optimizer. Seeds the candidate set with the fast result
- * (so it can never do worse), then runs a GRASP + ruin-and-recreate local search,
- * keeping the best distinct compositions by total Wp until the budget, iteration
- * cap, or cancellation is reached. Reuses the MaxRects packer and tightened
- * geometries from {@link ./optimize}.
+ * (so it can never do worse), then alternates two kinds of iterations until the
+ * budget, iteration cap, or cancellation is reached:
+ *
+ *  - **explore** — a fresh GRASP construction (randomized greedy over a random
+ *    geometry / rule / orientation mode) followed by a short local search;
+ *  - **exploit** — ruin-and-recreate around one of the best layouts found so far
+ *    (the elite pool), which steadily tightens the best-known result instead of
+ *    hoping a from-scratch sample lands higher.
+ *
+ * The exploit half is what makes the result stable: without it every iteration is
+ * an independent draw, so tiny input changes (a keep-out nudged 1cm, one extra
+ * panel model) visibly shift where the best sample happens to land. Iterations are
+ * split round-robin across {@link ISLANDS} independent trajectories with separate
+ * elite pools, so one pool converging on a mediocre basin early cannot trap the
+ * whole search. Each iteration runs on its own seeded RNG stream, so randomness
+ * consumed by one iteration cannot cascade into the next. Keeps the best distinct
+ * compositions by total Wp, reusing the MaxRects packer and tightened geometries
+ * from {@link ./optimize}.
  */
 export function optimizeThorough(config: Config, opts: ThoroughOpts = {}): Layout[] {
   const {
@@ -167,13 +198,32 @@ export function optimizeThorough(config: Config, opts: ThoroughOpts = {}): Layou
   }
   if (valid.length === 0) return [...byComposition.values()];
 
-  const consider = (placements: Placement[]) => {
+  type Elite = { key: string; power: number; placements: Placement[] };
+  const islands: Elite[][] = Array.from({ length: ISLANDS }, () => []);
+  const considerElite = (pool: Elite[], key: string, placements: Placement[], power: number) => {
+    if (placements.length === 0) return;
+    const at = pool.findIndex((e) => e.key === key);
+    if (at >= 0) {
+      if (power <= pool[at].power) return;
+      pool.splice(at, 1);
+    }
+    const idx = pool.findIndex((e) => e.power < power);
+    pool.splice(idx < 0 ? pool.length : idx, 0, { key, power, placements });
+    if (pool.length > ELITE_MAX) pool.pop();
+  };
+  const consider = (pool: Elite[], placements: Placement[]) => {
     const key = compositionKey(placements);
+    const power = totalPower(placements);
     const existing = byComposition.get(key);
-    if (!existing || totalPower(placements) > existing.totalPower) {
+    if (!existing || power > existing.totalPower) {
       byComposition.set(key, summarize(placements, usable));
     }
+    considerElite(pool, key, placements, power);
   };
+  // Seed only the first island with the fast layouts; the others build their own
+  // elite pools from scratch, so at least one search trajectory stays independent
+  // of the seeding.
+  for (const l of byComposition.values()) considerElite(islands[0], compositionKey(l.placements), l.placements, l.totalPower);
   const snapshot = (): Layout[] => {
     let variants = [...byComposition.values()];
     const nonEmpty = variants.filter((v) => v.placements.length > 0);
@@ -186,8 +236,8 @@ export function optimizeThorough(config: Config, opts: ThoroughOpts = {}): Layou
     return m;
   };
 
-  const rng = mulberry32(seed);
   const geometries = packGeometries(config).filter((g) => g.length > 0);
+  const realGeom = geometries[0];
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const start = now();
   let iterations = 0;
@@ -196,22 +246,38 @@ export function optimizeThorough(config: Config, opts: ThoroughOpts = {}): Layou
     onProgress?.({ bestPower: bestPower(), elapsedMs: now() - start, iterations, layouts: snapshot() });
 
   emit(); // publish the seeded result so an early cancel still has something to keep
+  if (geometries.length === 0) return snapshot();
 
   while (iterations < maxIterations) {
     if (shouldStop?.()) break;
     if (now() - start >= budgetMs) break;
     iterations++;
 
-    const geom = geometries[Math.floor(rng() * geometries.length)];
-    const rule = RULES[Math.floor(rng() * RULES.length)];
-    const mode = MODES[Math.floor(rng() * MODES.length)];
-    const models = shuffled(valid, rng).map((o) => toModel(o, config.panelGap, mode));
-    const alpha = 0.1 + rng() * 0.4;
+    // Independent per-iteration stream: iteration k always sees the same randomness
+    // for a given seed, no matter what earlier iterations consumed.
+    const rng = mulberry32((seed ^ Math.imul(iterations, 0x9e3779b9)) >>> 0);
 
-    let placements = packInOrder(geom, models, rule, rng, alpha);
-    placements = localSearch(placements, geom, valid, config, rng);
+    const pool = islands[iterations % ISLANDS];
+    const exploit = pool.length > 0 && Math.floor(iterations / ISLANDS) % 2 === 0;
+    let placements: Placement[];
+    if (exploit) {
+      // Climb from a random elite on the real free space: an elite found on a
+      // tightened geometry is always valid there, and it has the most room to
+      // refill. (Tightened geometries stay the explore half's job — mixing them
+      // in here measurably slows convergence.)
+      const elite = pool[Math.floor(rng() * pool.length)].placements;
+      placements = localSearch(elite, realGeom, valid, config, rng, 8);
+    } else {
+      const geom = geometries[Math.floor(rng() * geometries.length)];
+      const rule = RULES[Math.floor(rng() * RULES.length)];
+      const mode = MODES[Math.floor(rng() * MODES.length)];
+      const models = shuffled(valid, rng).map((o) => toModel(o, config.panelGap, mode));
+      const alpha = 0.1 + rng() * 0.4;
+      placements = packInOrder(geom, models, rule, rng, alpha);
+      placements = localSearch(placements, geom, valid, config, rng, 4);
+    }
     placements = upgradePass(placements, valid, config.panelGap);
-    consider(placements);
+    consider(pool, placements);
 
     if (onProgress && now() - lastProgress > 150) {
       lastProgress = now();
