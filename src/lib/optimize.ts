@@ -1,27 +1,45 @@
-import type { Config, Layout, Placement, PanelOption, Rect } from './types';
+import type { Config, Layout, Placement, PanelOption, Rect, Surface, SurfaceTask } from './types';
 import { insetRect, expandRect, subtractAll, area, isEmpty } from './geometry';
 import { packInOrder, splitFree, prune, type ModelCandidate, type FitRule } from './packing';
 import { rankLayouts, type RankOptions } from './ranking';
-import { packablePanels } from './panels';
+import { packablePanels, panelsAllowedOn } from './panels';
 
-function innerRect(config: Config): Rect {
-  return insetRect({ x: 0, y: 0, w: config.roof.width, h: config.roof.height }, config.edgeMargin);
+/**
+ * The optimizer's view of one surface: its own geometry plus the config-wide settings
+ * (margins, gap, panel catalog) that apply to every surface alike.
+ *
+ * The catalog is narrowed to the models this surface can actually mount, so the packing
+ * code below never has to know that rigid and flexible panels exist.
+ */
+export function taskFor(config: Config, surface: Surface): SurfaceTask {
+  return {
+    width: surface.width,
+    height: surface.height,
+    keepOuts: surface.keepOuts,
+    edgeMargin: config.edgeMargin,
+    panelGap: config.panelGap,
+    panelOptions: panelsAllowedOn(config.panelOptions, surface.allowedPanels),
+  };
+}
+
+function innerRect(config: SurfaceTask): Rect {
+  return insetRect({ x: 0, y: 0, w: config.width, h: config.height }, config.edgeMargin);
 }
 
 /**
  * Build the free rectangles the packer fills. Panels are packed as footprints
- * (panel + gap) and centered within them, so the pack region is the roof inset by
+ * (panel + gap) and centered within them, so the pack region is the surface inset by
  * the edge margin then *expanded* by half the gap — letting a panel's trailing
  * half-gap overhang the boundary instead of wasting a full gap. Keep-outs are
  * grown by half the gap for the same reason; centering then keeps a full gap
  * between any panel and a keep-out.
  *
  * The result are *maximal* rectangles (they may overlap at the corners), so a
- * keep-out in the middle of the roof still leaves full-height columns to its left
+ * keep-out in the middle of the surface still leaves full-height columns to its left
  * and right rather than fragments clipped to its vertical band. The packer splits
  * every free rectangle against each placed panel, so overlapping inputs are safe.
  */
-export function buildFreeRects(config: Config): Rect[] {
+export function buildFreeRects(config: SurfaceTask): Rect[] {
   const inner = innerRect(config);
   if (isEmpty(inner)) return [];
   const half = config.panelGap / 2;
@@ -35,11 +53,11 @@ export function buildFreeRects(config: Config): Rect[] {
 }
 
 /**
- * Exact usable area (cm²): the roof inset by the edge margin, minus each keep-out
+ * Exact usable area (cm²): the surface inset by the edge margin, minus each keep-out
  * grown by the full gap clearance. A non-overlapping partition, so it is safe to
  * sum; used as the coverage denominator.
  */
-export function usableArea(config: Config): number {
+export function usableArea(config: SurfaceTask): number {
   const inner = innerRect(config);
   if (isEmpty(inner)) return 0;
   const holes = config.keepOuts.map((k) => expandRect(k, config.panelGap));
@@ -168,7 +186,7 @@ const MAX_TIGHTENED = 28;
 /**
  * Geometries to pack into. The first is the real free space; the rest are
  * *tightened* — each keep-out enlarged a little, or a slightly larger edge margin.
- * A layout that avoids a larger keep-out (or stays inside a smaller roof) is always
+ * A layout that avoids a larger keep-out (or stays inside a smaller surface) is always
  * valid for the real config, so packing these and keeping the best can only help.
  *
  * This fixes a greedy-instability class where the best packing needs a region to be
@@ -177,7 +195,7 @@ const MAX_TIGHTENED = 28;
  * real geometry never discovers. Geometries are generated level-major (every keep-out
  * at +1cm first, then +2cm, …) so the most useful, smallest tightenings survive the cap.
  */
-export function packGeometries(config: Config): Rect[][] {
+export function packGeometries(config: SurfaceTask): Rect[][] {
   const out: Rect[][] = [buildFreeRects(config)];
   const tightened: Rect[][] = [];
 
@@ -206,7 +224,7 @@ export function packGeometries(config: Config): Rect[][] {
  * `rank` optionally re-orders the candidates by secondary criteria within a tolerance
  * band of the best Wp (see {@link rankLayouts}); the search itself is unaffected.
  */
-export function optimizeVariants(config: Config, max = 5, rank?: RankOptions): Layout[] {
+export function optimizeVariants(config: SurfaceTask, max = 5, rank?: RankOptions): Layout[] {
   const usable = usableArea(config);
   const valid = packablePanels(config.panelOptions);
   if (valid.length === 0 || isEmpty(innerRect(config))) {
@@ -236,11 +254,15 @@ export function optimizeVariants(config: Config, max = 5, rank?: RankOptions): L
   // Drop the "nothing placed" option if any real layout exists.
   const nonEmpty = variants.filter((v) => v.placements.length > 0);
   if (nonEmpty.length > 0) variants = nonEmpty;
+  // Every geometry came back empty (e.g. keep-outs cover the whole surface). Report the
+  // empty layout rather than no options at all, so a caller can always tell "optimized,
+  // nothing fits" from "not optimized yet" — the early returns above do the same.
+  if (variants.length === 0) variants = [summarize([], usable)];
 
   return rankLayouts(variants, config.panelOptions, rank, max);
 }
 
 /** Convenience: the single best layout (highest total Wp). */
-export function optimize(config: Config): Layout {
+export function optimize(config: SurfaceTask): Layout {
   return optimizeVariants(config, 1)[0];
 }

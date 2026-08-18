@@ -15,6 +15,13 @@
   let optionsOpen = $state(false);
 
   const elapsedS = $derived(($optimizeProgress.elapsedMs / 1000).toFixed(1));
+  // Which surface is being worked on, when there is more than one. Built here rather
+  // than inline so the leading space survives the template's whitespace trimming.
+  const scope = $derived(
+    $optimizeProgress.surfaceCount > 1
+      ? ` ${$optimizeProgress.surfaceName} (${$optimizeProgress.surfaceIndex + 1}/${$optimizeProgress.surfaceCount})`
+      : '',
+  );
   const selected = $derived($rankOptions.criteria);
   const tolerancePct = $derived(Math.round($rankOptions.tolerance * 100));
 
@@ -58,7 +65,7 @@
 
 {#if $optimizing}
   <span class="progress" aria-live="polite">
-    Optimizing… {elapsedS}s · {$optimizeProgress.bestPower} Wp
+    Optimizing{scope}… {elapsedS}s · {$optimizeProgress.bestPower} Wp
   </span>
   <button class="danger" onclick={cancelOptimize}>Cancel</button>
 {:else}

@@ -1,7 +1,15 @@
 <script lang="ts">
-  import { config, layouts, selectedLayout, rankOptions } from '../lib/stores';
+  import {
+    config,
+    layoutsBySurface,
+    selectedBySurface,
+    selectedLayouts,
+    selectSurfaceLayout,
+    rankOptions,
+  } from '../lib/stores';
   import { panelColor } from '../lib/colors';
-  import { CRITERION_LABELS, layoutFieldStat, optionsById } from '../lib/ranking';
+  import { isPanelFlexible } from '../lib/panels';
+  import { CRITERION_LABELS, layoutFieldStat, optionsById, type FieldStat } from '../lib/ranking';
   import { fmtArea, fmtPrice, fmtNum as fmtDec } from '../lib/format';
   import type { Layout } from '../lib/types';
 
@@ -9,13 +17,9 @@
 
   const FIELD_NAMES = { weight: 'weight', price: 'price' } as const;
 
-  /**
-   * Weight / price total for one option. Always renders: an em dash when no placed model
-   * carries the field, and a "≥" prefix when only some do, so a partial sum is never
-   * shown as if it were exact.
-   */
-  function statFor(l: Layout, field: 'weight' | 'price') {
-    const { total, missing, models } = layoutFieldStat(l, byId, field);
+  /** Render one weight/price figure from its stat, keeping the "≥" / "—" semantics. */
+  function renderStat(stat: FieldStat, field: 'weight' | 'price') {
+    const { total, missing, models } = stat;
     const name = FIELD_NAMES[field];
     if (models === 0 || missing === models) {
       return { text: '—', partial: false, title: `No placed model has a ${name}.` };
@@ -29,24 +33,72 @@
     };
   }
 
-  const anyPartial = $derived(
-    $layouts.some((l) => statFor(l, 'weight').partial || statFor(l, 'price').partial),
+  /**
+   * Weight / price total for one option. Always renders: an em dash when no placed model
+   * carries the field, and a "≥" prefix when only some do, so a partial sum is never
+   * shown as if it were exact.
+   */
+  function statFor(l: Layout, field: 'weight' | 'price') {
+    return renderStat(layoutFieldStat(l, byId, field), field);
+  }
+
+  // ----- Combined totals across the surfaces' currently selected layouts -----
+
+  const chosen = $derived(
+    $config.surfaces.map((s) => $selectedLayouts[s.id]).filter((l): l is Layout => l !== null),
   );
 
-  // Highest total Wp on screen. rankLayouts guarantees the power optimum is among the
-  // returned options, so this is the true optimum even when criteria reorder them.
-  const maxPower = $derived($layouts.reduce((m, l) => Math.max(m, l.totalPower), 0));
-  const showOffset = $derived($rankOptions.criteria.length > 0 && $layouts.length > 1);
+  const combined = $derived({
+    totalPower: chosen.reduce((s, l) => s + l.totalPower, 0),
+    panelCount: chosen.reduce((s, l) => s + l.panelCount, 0),
+    usedArea: chosen.reduce((s, l) => s + l.usedArea, 0),
+  });
 
-  /** How far an option sits below the power optimum, or null when it is the optimum. */
-  function offsetFor(l: Layout) {
-    if (!showOffset || maxPower <= 0 || l.totalPower >= maxPower) return null;
+  /**
+   * Weight / price summed across surfaces. Data-completeness counts are summed too, so a
+   * gap on any surface still marks the combined figure as a lower bound.
+   */
+  function combinedStat(field: 'weight' | 'price') {
+    const sum = chosen.reduce<FieldStat>(
+      (acc, l) => {
+        const s = layoutFieldStat(l, byId, field);
+        return {
+          total: acc.total + s.total,
+          missing: acc.missing + s.missing,
+          models: acc.models + s.models,
+        };
+      },
+      { total: 0, missing: 0, models: 0 },
+    );
+    return renderStat(sum, field);
+  }
+
+  // ----- Per-surface presentation -----
+
+  const anyPartial = $derived(
+    Object.values($layoutsBySurface)
+      .flat()
+      .some((l) => statFor(l, 'weight').partial || statFor(l, 'price').partial),
+  );
+
+  /**
+   * How far an option sits below its surface's power optimum, or null when it is the
+   * optimum. rankLayouts guarantees the power optimum is among the returned options, so
+   * the max over the list is the true optimum even when criteria reorder them.
+   */
+  function offsetFor(l: Layout, options: Layout[]) {
+    const maxPower = options.reduce((m, o) => Math.max(m, o.totalPower), 0);
+    if (!($rankOptions.criteria.length > 0 && options.length > 1)) return null;
+    if (maxPower <= 0 || l.totalPower >= maxPower) return null;
     const absolute = maxPower - l.totalPower;
     return {
       pct: (absolute / maxPower) * 100,
       title: `${Math.round(absolute)} Wp less than the highest-Wp option (${maxPower} Wp).`,
     };
   }
+
+  const showOffset = (options: Layout[]) =>
+    $rankOptions.criteria.length > 0 && options.length > 1;
 
   // Per-model breakdown for a given layout, ordered by panel Wp (highest first).
   // Color is taken from the option's original index so it matches the canvas.
@@ -61,6 +113,7 @@
           count: items.length,
           power: items.reduce((s, p) => s + p.power, 0),
           wp: opt.power,
+          flexible: isPanelFlexible(opt),
         };
       })
       .filter((b) => b.count > 0)
@@ -94,92 +147,145 @@
   // With secondary criteria the top option is not necessarily the highest-Wp one, so
   // spell out why it leads.
   const criteriaNote = $derived(
-    $rankOptions.criteria.length > 0 && $layouts.length > 1
+    $rankOptions.criteria.length > 0
       ? `Ranked by ${$rankOptions.criteria.map((c) => CRITERION_LABELS[c].toLowerCase()).join(', then ')} among layouts within ${Math.round($rankOptions.tolerance * 100)}% of the best Wp.`
       : '',
   );
 
-  let hasResults = $derived($layouts.length > 0);
-  let noFit = $derived($layouts.length > 0 && $layouts.every((l) => l.placements.length === 0));
+  const multi = $derived($config.surfaces.length > 1);
+  const hasResults = $derived($config.surfaces.some((s) => ($layoutsBySurface[s.id]?.length ?? 0) > 0));
+  const noFit = $derived(
+    hasResults &&
+      $config.surfaces.every((s) =>
+        ($layoutsBySurface[s.id] ?? []).every((l) => l.placements.length === 0),
+      ),
+  );
 </script>
 
 <section class="card">
   <div class="head">
     <h2>Results</h2>
-    {#if hasResults && !noFit}
-      <span class="count">{$layouts.length} option{$layouts.length > 1 ? 's' : ''}</span>
-    {/if}
   </div>
 
   {#if !hasResults}
     <p class="empty">Click <strong>Optimize</strong> to compute layouts.</p>
   {:else if noFit}
-    <p class="empty">No panels fit in the available area. Try smaller panels or a larger roof.</p>
+    <p class="empty">
+      No panels fit in the available area. Try smaller panels or a larger surface.
+    </p>
   {:else}
-    <p class="hint">Select an option to preview it on the roof.</p>
+    <p class="hint">Select an option to preview it on the canvas.</p>
     {#if criteriaNote}
       <p class="criteria-note">{criteriaNote}</p>
     {/if}
     {#if anyPartial}
       <p class="partial-note">Totals marked ≥ exclude models with no weight or price.</p>
     {/if}
-    {#each $layouts as l, i (i)}
-      <button
-        class="option"
-        class:active={$selectedLayout === i}
-        onclick={() => selectedLayout.set(i)}
-      >
+
+    {#if multi}
+      <div class="combined">
         <div class="orow">
-          <span class="otitle">
-            Option {i + 1}
-            {#if i === 0}<span class="badge">Best</span>{/if}
-          </span>
-          <span class="power">{l.totalPower} <span class="wp">Wp</span></span>
+          <span class="otitle">All surfaces</span>
+          <span class="power">{combined.totalPower} <span class="wp">Wp</span></span>
         </div>
         <div class="meta">
-          {l.panelCount} panel{l.panelCount === 1 ? '' : 's'} · {Math.round(l.coverage * 100)}% coverage
-          · {fmtArea(l.usedArea)}
-          {#if showOffset}
-            {@const off = offsetFor(l)}
-            {#if off}
-              <span class="offset" title={off.title}>· −{off.pct.toFixed(1)}% vs max Wp</span>
-            {:else}
-              <span class="maxtag" title="Highest total Wp of the computed options.">· max Wp</span>
-            {/if}
-          {/if}
+          {combined.panelCount} panel{combined.panelCount === 1 ? '' : 's'} across
+          {$config.surfaces.length} surfaces · {fmtArea(combined.usedArea)}
         </div>
         <div class="totals">
           {#each [{ field: 'weight', label: 'Weight' }, { field: 'price', label: 'Price' }] as const as s (s.field)}
-            {@const stat = statFor(l, s.field)}
+            {@const stat = combinedStat(s.field)}
             <span class="tot">
               <span class="tlabel">{s.label}</span>
               <span class="tvalue" class:partial={stat.partial} title={stat.title}>{stat.text}</span>
             </span>
           {/each}
         </div>
-        <div class="breakdown">
-          {#each breakdownFor(l) as b (b.id)}
-            <span class="chip">
-              <span class="swatch" style="background: {b.color}"></span>
-              {b.name} × {b.count}
-            </span>
-          {/each}
+      </div>
+    {/if}
+
+    {#each $config.surfaces as surface (surface.id)}
+      {@const options = $layoutsBySurface[surface.id] ?? []}
+      {#if multi}
+        <div class="shead">
+          <h3>{surface.name}</h3>
+          {#if options.length > 0}
+            <span class="count">{options.length} option{options.length > 1 ? 's' : ''}</span>
+          {/if}
         </div>
-        {#if wiringFor(l).length > 0}
-          <div class="wiring">
-            <div class="whead">
-              <span></span><span>Series</span><span>Parallel</span>
+      {:else if options.length > 0}
+        <p class="count solo">{options.length} option{options.length > 1 ? 's' : ''}</p>
+      {/if}
+
+      {#if options.length === 0}
+        <p class="empty">Not optimized yet.</p>
+      {:else if options.every((l) => l.placements.length === 0)}
+        <p class="empty">No panels fit on this surface.</p>
+      {:else}
+        {#each options as l, i (i)}
+          <button
+            class="option"
+            class:active={($selectedBySurface[surface.id] ?? 0) === i}
+            onclick={() => selectSurfaceLayout(surface.id, i)}
+          >
+            <div class="orow">
+              <span class="otitle">
+                Option {i + 1}
+                {#if i === 0}<span class="badge">Best</span>{/if}
+              </span>
+              <span class="power">{l.totalPower} <span class="wp">Wp</span></span>
             </div>
-            {#each wiringFor(l) as w (w.id)}
-              <div class="wrow">
-                <span class="wname">{w.name} ×{w.count}</span>
-                <span>{fmtNum(w.seriesV)} V · {fmtNum(w.seriesA)} A</span>
-                <span>{fmtNum(w.parallelV)} V · {fmtNum(w.parallelA)} A</span>
+            <div class="meta">
+              {l.panelCount} panel{l.panelCount === 1 ? '' : 's'} · {Math.round(l.coverage * 100)}%
+              coverage · {fmtArea(l.usedArea)}
+              {#if showOffset(options)}
+                {@const off = offsetFor(l, options)}
+                {#if off}
+                  <span class="offset" title={off.title}>· −{off.pct.toFixed(1)}% vs max Wp</span>
+                {:else}
+                  <span class="maxtag" title="Highest total Wp of the computed options."
+                    >· max Wp</span
+                  >
+                {/if}
+              {/if}
+            </div>
+            <div class="totals">
+              {#each [{ field: 'weight', label: 'Weight' }, { field: 'price', label: 'Price' }] as const as s (s.field)}
+                {@const stat = statFor(l, s.field)}
+                <span class="tot">
+                  <span class="tlabel">{s.label}</span>
+                  <span class="tvalue" class:partial={stat.partial} title={stat.title}
+                    >{stat.text}</span
+                  >
+                </span>
+              {/each}
+            </div>
+            <div class="breakdown">
+              {#each breakdownFor(l) as b (b.id)}
+                <span class="chip">
+                  <span class="swatch" style="background: {b.color}"></span>
+                  {b.name} × {b.count}
+                  {#if b.flexible}<span class="flex" title="Flexible panel">flex</span>{/if}
+                </span>
+              {/each}
+            </div>
+            {#if wiringFor(l).length > 0}
+              <div class="wiring">
+                <div class="whead">
+                  <span></span><span>Series</span><span>Parallel</span>
+                </div>
+                {#each wiringFor(l) as w (w.id)}
+                  <div class="wrow">
+                    <span class="wname">{w.name} ×{w.count}</span>
+                    <span>{fmtNum(w.seriesV)} V · {fmtNum(w.seriesA)} A</span>
+                    <span>{fmtNum(w.parallelV)} V · {fmtNum(w.parallelA)} A</span>
+                  </div>
+                {/each}
               </div>
-            {/each}
-          </div>
-        {/if}
-      </button>
+            {/if}
+          </button>
+        {/each}
+      {/if}
     {/each}
   {/if}
 </section>
@@ -205,10 +311,13 @@
     font-size: 12px;
     color: var(--text-dim);
   }
+  .count.solo {
+    margin: 0 0 8px;
+  }
   .empty {
     color: var(--text-dim);
     font-size: 13px;
-    margin: 0;
+    margin: 0 0 8px;
   }
   .hint {
     color: var(--text-dim);
@@ -220,6 +329,29 @@
     font-size: 11px;
     line-height: 1.4;
     margin: -4px 0 10px;
+  }
+  /* Surface heading: a divider that separates one surface's options from the next. */
+  .shead {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin: 14px 0 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .shead h3 {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  /* The combined card is the sum of the selected options, not a selectable option
+     itself, so it is accented rather than styled as a button. */
+  .combined {
+    background: rgba(245, 166, 35, 0.08);
+    border: 1px solid var(--accent);
+    border-radius: 7px;
+    padding: 10px;
+    margin-bottom: 8px;
   }
   .option {
     display: block;
@@ -345,6 +477,13 @@
     width: 10px;
     height: 10px;
     border-radius: 3px;
+  }
+  /* Rigid is the default, so only flexible models carry a marker. */
+  .flex {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent-2);
   }
   .wiring {
     margin-top: 8px;
