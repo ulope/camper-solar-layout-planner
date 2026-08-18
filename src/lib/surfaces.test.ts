@@ -9,6 +9,7 @@ const surface = (id: string, width: number, height: number): Surface => ({
   width,
   height,
   keepOuts: [],
+  allowedPanels: 'both',
 });
 
 const roof = surface('roof', 300, 180);

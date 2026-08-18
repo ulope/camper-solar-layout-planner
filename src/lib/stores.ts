@@ -288,7 +288,14 @@ export function addSurface(): string {
     ...c,
     surfaces: [
       ...c.surfaces,
-      { id, name: `Surface ${c.surfaces.length + 1}`, width: 200, height: 100, keepOuts: [] },
+      {
+        id,
+        name: `Surface ${c.surfaces.length + 1}`,
+        width: 200,
+        height: 100,
+        keepOuts: [],
+        allowedPanels: 'both',
+      },
     ],
   }));
   activeSurfaceId.set(id);
@@ -297,7 +304,7 @@ export function addSurface(): string {
 
 export function updateSurface(
   id: string,
-  patch: Partial<Pick<Surface, 'name' | 'width' | 'height'>>,
+  patch: Partial<Pick<Surface, 'name' | 'width' | 'height' | 'allowedPanels'>>,
 ): void {
   config.update((c) => ({
     ...c,

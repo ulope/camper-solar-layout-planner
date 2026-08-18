@@ -2,11 +2,14 @@ import type { Config, Layout, Placement, PanelOption, Rect, Surface, SurfaceTask
 import { insetRect, expandRect, subtractAll, area, isEmpty } from './geometry';
 import { packInOrder, splitFree, prune, type ModelCandidate, type FitRule } from './packing';
 import { rankLayouts, type RankOptions } from './ranking';
-import { packablePanels } from './panels';
+import { packablePanels, panelsAllowedOn } from './panels';
 
 /**
  * The optimizer's view of one surface: its own geometry plus the config-wide settings
  * (margins, gap, panel catalog) that apply to every surface alike.
+ *
+ * The catalog is narrowed to the models this surface can actually mount, so the packing
+ * code below never has to know that rigid and flexible panels exist.
  */
 export function taskFor(config: Config, surface: Surface): SurfaceTask {
   return {
@@ -15,7 +18,7 @@ export function taskFor(config: Config, surface: Surface): SurfaceTask {
     keepOuts: surface.keepOuts,
     edgeMargin: config.edgeMargin,
     panelGap: config.panelGap,
-    panelOptions: config.panelOptions,
+    panelOptions: panelsAllowedOn(config.panelOptions, surface.allowedPanels),
   };
 }
 

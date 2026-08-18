@@ -11,12 +11,18 @@ const panel = (id: string, width: number, height: number, power: number): PanelO
   power,
 });
 
-const surface = (id: string, width: number, height: number): Surface => ({
+const surface = (
+  id: string,
+  width: number,
+  height: number,
+  allowedPanels: Surface['allowedPanels'] = 'both',
+): Surface => ({
   id,
   name: id,
   width,
   height,
   keepOuts: [],
+  allowedPanels,
 });
 
 const config = (surfaces: Surface[], panelOptions: PanelOption[] = [panel('p', 100, 100, 100)]): Config => ({
@@ -114,5 +120,63 @@ describe('optimizeThoroughAll', () => {
     optimizeThoroughAll(cfg, { budgetMs: 300, seed: 3 });
     // Two surfaces share one budget rather than taking it each.
     expect(Date.now() - started).toBeLessThan(2000);
+  });
+});
+
+describe('per-surface panel types', () => {
+  // Two models that tile the same 200x100 surface exactly twice, so the only thing
+  // separating the results is which kind of panel the surface accepts.
+  const RIGID = panel('rigid', 100, 100, 100);
+  const FLEX = { ...panel('flex', 100, 100, 150), flexible: true };
+  const mixed = (surfaces: Surface[]) => config(surfaces, [RIGID, FLEX]);
+
+  const idsIn = (layout: { placements: { optionId: string }[] }) =>
+    [...new Set(layout.placements.map((p) => p.optionId))].sort();
+
+  it('places only flexible models on a flexible-only surface', () => {
+    const results = optimizeFastAll(mixed([surface('wall', 200, 100, 'flexible')]));
+    expect(idsIn(results['wall'][0])).toEqual(['flex']);
+  });
+
+  it('places only rigid models on a rigid-only surface', () => {
+    const results = optimizeFastAll(mixed([surface('roof', 200, 100, 'rigid')]));
+    expect(idsIn(results['roof'][0])).toEqual(['rigid']);
+  });
+
+  it('lets a both-surface use the whole catalog', () => {
+    const results = optimizeFastAll(mixed([surface('roof', 200, 100, 'both')]));
+    // The flexible model is worth more, so an unrestricted surface picks it.
+    expect(results['roof'][0].totalPower).toBe(300);
+  });
+
+  it('applies each surface\'s allowance independently', () => {
+    const results = optimizeFastAll(
+      mixed([surface('roof', 200, 100, 'rigid'), surface('wall', 200, 100, 'flexible')]),
+    );
+    expect(idsIn(results['roof'][0])).toEqual(['rigid']);
+    expect(idsIn(results['wall'][0])).toEqual(['flex']);
+  });
+
+  it('returns an empty layout when the catalog has no model of the allowed kind', () => {
+    const results = optimizeFastAll(config([surface('wall', 200, 100, 'flexible')], [RIGID]));
+    expect(results['wall']).toHaveLength(1);
+    expect(results['wall'][0].placements).toEqual([]);
+    expect(results['wall'][0].totalPower).toBe(0);
+  });
+
+  it('still honours the global enable flag within an allowed kind', () => {
+    const results = optimizeFastAll(
+      config([surface('wall', 200, 100, 'flexible')], [RIGID, { ...FLEX, enabled: false }]),
+    );
+    expect(results['wall'][0].placements).toEqual([]);
+  });
+
+  it('carries the allowance through the thorough search too', () => {
+    const results = optimizeThoroughAll(mixed([surface('roof', 200, 100, 'rigid')]), {
+      maxIterationsPerSurface: 20,
+      budgetMs: Infinity,
+      seed: 7,
+    });
+    expect(idsIn(results['roof'][0])).toEqual(['rigid']);
   });
 });

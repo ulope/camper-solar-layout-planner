@@ -1,7 +1,7 @@
 <script lang="ts">
   import { config, removePanelOption, setPanelEnabled } from '../lib/stores';
   import { panelColor } from '../lib/colors';
-  import { isPanelEnabled } from '../lib/panels';
+  import { isPanelEnabled, isPanelFlexible } from '../lib/panels';
   import { fmtNum, fmtPrice } from '../lib/format';
   import type { PanelOption } from '../lib/types';
   import PanelOptionModal from './PanelOptionModal.svelte';
@@ -40,6 +40,8 @@
       `${fmtNum(o.power)} Wp`,
       o.weight ? `${fmtNum(o.weight)} kg` : null,
       o.price ? fmtPrice(o.price) : null,
+      // Rigid is the default, so only the exception is worth a word.
+      isPanelFlexible(o) ? 'flexible' : null,
     ]
       .filter(Boolean)
       .join(' · ');

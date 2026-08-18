@@ -37,6 +37,12 @@ https://ulope.github.io/camper-solar-layout-planner/
   say), each with its own name, length × width (cm) and keep-outs. They are drawn stacked
   vertically on one canvas and all are optimized together. Edge margin and inter-panel gap
   are configured once and apply to every surface.
+- **Rigid / flexible panels** — each panel model is either rigid (framed) or flexible
+  (bendable), and each surface declares which it accepts: **Rigid**, **Flexible** or
+  **Both**. A curved or thin wall can then be planned with flexible models only while the
+  roof keeps its framed ones. Surfaces default to Both, so nothing changes until you
+  restrict one; if a surface allows a type you have no model selected for, it says so
+  inline rather than silently coming back empty.
 - **Keep-out areas** — belong to a surface; add by dragging on that surface in the canvas
   or via the list, **drag to move** and **drag edges/corners to resize**. Each shows its
   live size, and while dragging or resizing, golden guide lines mark the edge positions and
@@ -48,7 +54,8 @@ https://ulope.github.io/camper-solar-layout-planner/
   every reading is in that surface's own coordinates), a mouse-position crosshair with a
   live cm readout, and color-coded panels labeled with model name and Wp.
 - **Panel catalog** — any number of models (name, length, width, power in Wp), listed as
-  compact one-line entries; click one to edit it in a dialog. Optional **voltage** and
+  compact one-line entries; click one to edit it in a dialog. Each model is marked **rigid**
+  or **flexible**, which decides the surfaces it can go on. Optional **voltage** and
   **current** enable a series/parallel wiring readout, and optional **weight** and
   **price** feed the secondary optimization criteria.
 - **Optimizer** — selects and places panels to maximize total Wp. Panels may be rotated
@@ -87,9 +94,10 @@ https://ulope.github.io/camper-solar-layout-planner/
 ## How the optimizer works
 
 Each surface is packed independently — no placement constraint crosses a surface
-boundary, so optimizing each on its own and summing gives the joint best total Wp. Per
-surface, the usable area is the surface inset by the edge margin, with each keep-out
-removed, producing a set of free rectangles. Panels are packed as gap-inclusive footprints and
+boundary, so optimizing each on its own and summing gives the joint best total Wp. Each
+surface is packed from only the models it accepts (rigid, flexible or both), on top of the
+models you have selected in the catalog. Per surface, the usable area is the surface inset
+by the edge margin, with each keep-out removed, producing a set of free rectangles. Panels are packed as gap-inclusive footprints and
 centered within them (so a panel can sit flush against a boundary). A greedy MaxRects
 packer fills the rectangles trying both orientations per placement.
 

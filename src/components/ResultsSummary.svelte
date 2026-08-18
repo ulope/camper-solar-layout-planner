@@ -8,6 +8,7 @@
     rankOptions,
   } from '../lib/stores';
   import { panelColor } from '../lib/colors';
+  import { isPanelFlexible } from '../lib/panels';
   import { CRITERION_LABELS, layoutFieldStat, optionsById, type FieldStat } from '../lib/ranking';
   import { fmtArea, fmtPrice, fmtNum as fmtDec } from '../lib/format';
   import type { Layout } from '../lib/types';
@@ -112,6 +113,7 @@
           count: items.length,
           power: items.reduce((s, p) => s + p.power, 0),
           wp: opt.power,
+          flexible: isPanelFlexible(opt),
         };
       })
       .filter((b) => b.count > 0)
@@ -263,6 +265,7 @@
                 <span class="chip">
                   <span class="swatch" style="background: {b.color}"></span>
                   {b.name} × {b.count}
+                  {#if b.flexible}<span class="flex" title="Flexible panel">flex</span>{/if}
                 </span>
               {/each}
             </div>
@@ -474,6 +477,13 @@
     width: 10px;
     height: 10px;
     border-radius: 3px;
+  }
+  /* Rigid is the default, so only flexible models carry a marker. */
+  .flex {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent-2);
   }
   .wiring {
     margin-top: 8px;

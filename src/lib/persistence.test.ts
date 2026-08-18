@@ -35,6 +35,10 @@ describe('migrateConfig (v1)', () => {
     expect(migrateConfig(older)!.gridSnap).toBe(1);
   });
 
+  it('lets the migrated roof take any panel type', () => {
+    expect(migrateConfig(v1())!.surfaces[0].allowedPanels).toBe('both');
+  });
+
   it('migrates the real v1 exports losslessly', () => {
     for (const fixture of [layout4, layout11]) {
       const c = migrateConfig(JSON.parse(JSON.stringify(fixture)))!;
@@ -62,11 +66,44 @@ describe('migrateConfig (v2)', () => {
     const multi: Config = {
       ...defaultConfig(),
       surfaces: [
-        { id: 'a', name: 'Roof', width: 300, height: 180, keepOuts: [] },
-        { id: 'b', name: 'Left wall', width: 400, height: 90, keepOuts: [] },
+        { id: 'a', name: 'Roof', width: 300, height: 180, keepOuts: [], allowedPanels: 'both' },
+        {
+          id: 'b',
+          name: 'Left wall',
+          width: 400,
+          height: 90,
+          keepOuts: [],
+          allowedPanels: 'flexible',
+        },
       ],
     };
-    expect(migrateConfig(JSON.parse(exportConfig(multi)))!.surfaces).toHaveLength(2);
+    const back = migrateConfig(JSON.parse(exportConfig(multi)))!;
+    expect(back.surfaces).toHaveLength(2);
+    expect(back.surfaces.map((s) => s.allowedPanels)).toEqual(['both', 'flexible']);
+  });
+
+  it('defaults a surface with no allowance, or an unrecognized one, to both', () => {
+    const base = { ...v1(), roof: undefined, keepOuts: undefined };
+    const withSurfaces = (allowedPanels: unknown) =>
+      migrateConfig({
+        ...base,
+        surfaces: [{ id: 'a', name: 'Roof', width: 100, height: 50, keepOuts: [], allowedPanels }],
+      })!.surfaces[0].allowedPanels;
+    expect(withSurfaces(undefined)).toBe('both');
+    expect(withSurfaces('nonsense')).toBe('both');
+    expect(withSurfaces('rigid')).toBe('rigid');
+  });
+
+  it('round-trips a flexible panel model', () => {
+    const c: Config = {
+      ...defaultConfig(),
+      panelOptions: [
+        { id: 'p1', name: 'Rigid', width: 100, height: 50, power: 100 },
+        { id: 'p2', name: 'Flex', width: 100, height: 50, power: 100, flexible: true },
+      ],
+    };
+    const back = migrateConfig(JSON.parse(exportConfig(c)))!;
+    expect(back.panelOptions.map((p) => p.flexible)).toEqual([undefined, true]);
   });
 
   it('names a surface that has none', () => {

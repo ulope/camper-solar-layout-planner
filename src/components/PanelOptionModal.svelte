@@ -2,6 +2,7 @@
   import Modal from './Modal.svelte';
   import { addPanelOption, updatePanelOption, removePanelOption } from '../lib/stores';
   import { CURRENCY, fmtNum, toNum, toOptNum } from '../lib/format';
+  import { isPanelFlexible } from '../lib/panels';
   import type { PanelOption } from '../lib/types';
 
   // `option === null` means "add a new model". Edits happen on a local draft and are only
@@ -12,7 +13,7 @@
   }: { open?: boolean; option?: PanelOption | null } = $props();
 
   // Number inputs bind to `number | null` (null while the field is empty).
-  type Draft = { name: string } & Record<
+  type Draft = { name: string; flexible: boolean } & Record<
     'width' | 'height' | 'power' | 'weight' | 'price' | 'voltage' | 'current',
     number | null
   >;
@@ -28,6 +29,7 @@
         price: null,
         voltage: null,
         current: null,
+        flexible: false,
       };
     }
     return {
@@ -39,6 +41,7 @@
       price: o.price ?? null,
       voltage: o.voltage ?? null,
       current: o.current ?? null,
+      flexible: isPanelFlexible(o),
     };
   }
 
@@ -79,6 +82,7 @@
       price,
       voltage: toOptNum(draft.voltage),
       current: toOptNum(draft.current),
+      flexible: draft.flexible,
     };
     if (option) updatePanelOption(option.id, patch);
     else addPanelOption(patch);
@@ -150,6 +154,22 @@
       </div>
     </div>
 
+    <p class="group">Mounting</p>
+    <div class="seg-group" role="group" aria-label="Panel mounting type">
+      <button
+        class="seg"
+        class:on={!draft.flexible}
+        onclick={() => (draft.flexible = false)}
+        title="Framed panel; only surfaces that allow rigid panels take it">Rigid</button
+      >
+      <button
+        class="seg"
+        class:on={draft.flexible}
+        onclick={() => (draft.flexible = true)}
+        title="Bendable panel; only surfaces that allow flexible panels take it">Flexible</button
+      >
+    </div>
+
     <p class="hint">
       Voltage, current, weight and price are optional. Weight and price feed the optional
       optimization criteria; missing values count as zero there.
@@ -185,6 +205,26 @@
   .grid {
     display: grid;
     gap: 10px;
+  }
+  /* Segmented picker, matching the optimizer's effort control. */
+  .seg-group {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .seg {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .seg.on {
+    background: var(--panel-bg-2);
+    color: var(--text);
   }
   .two {
     grid-template-columns: 1fr 1fr;

@@ -7,6 +7,27 @@
     removeSurface,
   } from '../lib/stores';
   import { num } from '../lib/format';
+  import { isPanelEnabled, isPanelFlexible } from '../lib/panels';
+  import type { AllowedPanels } from '../lib/types';
+
+  const ALLOWED: { value: AllowedPanels; label: string; title: string }[] = [
+    { value: 'rigid', label: 'Rigid', title: 'Only framed panels may be placed here' },
+    { value: 'flexible', label: 'Flexible', title: 'Only bendable panels may be placed here' },
+    { value: 'both', label: 'Both', title: 'Any panel may be placed here' },
+  ];
+
+  /**
+   * Whether a surface's allowance rules out every model the optimizer would consider —
+   * the surface would come back empty for a reason that is easy to miss otherwise.
+   * 'both' can never do this, so it never warns.
+   */
+  function starvedBy(allows: AllowedPanels): boolean {
+    if (allows === 'both') return false;
+    const wantFlexible = allows === 'flexible';
+    return !$config.panelOptions.some(
+      (o) => isPanelEnabled(o) && isPanelFlexible(o) === wantFlexible,
+    );
+  }
 </script>
 
 <section class="card">
@@ -62,6 +83,27 @@
             oninput={(e) => updateSurface(s.id, { height: num(e) })}
           />
         </label>
+      </div>
+      <div class="allow">
+        <span class="alabel">Panels</span>
+        <div class="seg-group" role="group" aria-label="Panel types allowed on {s.name}">
+          {#each ALLOWED as a (a.value)}
+            <button
+              class="seg"
+              class:on={s.allowedPanels === a.value}
+              title={a.title}
+              onclick={(e) => {
+                e.stopPropagation();
+                updateSurface(s.id, { allowedPanels: a.value });
+              }}>{a.label}</button
+            >
+          {/each}
+        </div>
+        {#if starvedBy(s.allowedPanels)}
+          <p class="warn">
+            No {s.allowedPanels} models are selected — nothing can be placed here.
+          </p>
+        {/if}
       </div>
     </div>
   {/each}
@@ -162,6 +204,42 @@
     flex-direction: column;
     gap: 2px;
     margin-bottom: 0;
+  }
+  .allow {
+    grid-column: 1 / -1;
+    margin-top: 8px;
+  }
+  .alabel {
+    display: block;
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+  /* Segmented picker, matching the optimizer's effort control. */
+  .seg-group {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .seg {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 5px 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .seg.on {
+    background: var(--panel-bg-2);
+    color: var(--text);
+  }
+  .warn {
+    color: var(--accent);
+    font-size: 11px;
+    line-height: 1.4;
+    margin: 6px 0 0;
   }
   .grid {
     display: grid;

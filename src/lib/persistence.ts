@@ -1,4 +1,4 @@
-import type { Config, KeepOut, Surface } from './types';
+import type { AllowedPanels, Config, KeepOut, Surface } from './types';
 
 const STORAGE_KEY = 'camper-solar-layout:config:v1';
 
@@ -21,6 +21,7 @@ export function defaultConfig(): Config {
         width: 300,
         height: 180,
         keepOuts: [{ id: 'hatch-1', label: 'Roof hatch', x: 120, y: 60, w: 50, h: 50 }],
+        allowedPanels: 'both',
       },
     ],
     edgeMargin: 3,
@@ -34,6 +35,10 @@ export function defaultConfig(): Config {
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/** Anything unrecognized means "no restriction", which is how surfaces behaved before. */
+const toAllowedPanels = (v: unknown): AllowedPanels =>
+  v === 'rigid' || v === 'flexible' ? v : 'both';
 
 /** Shared fields of both payload versions, or null when they don't check out. */
 function commonFields(c: Record<string, unknown>) {
@@ -58,6 +63,7 @@ function toSurface(value: unknown, index: number): Surface | null {
     width: s.width,
     height: s.height,
     keepOuts: s.keepOuts as KeepOut[],
+    allowedPanels: toAllowedPanels(s.allowedPanels),
   };
 }
 
@@ -94,6 +100,7 @@ export function migrateConfig(value: unknown): Config | null {
           width: roof.width,
           height: roof.height,
           keepOuts: c.keepOuts as KeepOut[],
+          allowedPanels: 'both',
         },
       ],
       ...common,

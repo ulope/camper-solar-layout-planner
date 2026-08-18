@@ -15,7 +15,14 @@ export type PanelOption = {
   weight?: number; // kg — optional, used by the "lighter" optimization criterion
   price?: number; // currency units — optional, used by the "cheaper" criterion
   enabled?: boolean; // false excludes the model from optimization; absent means selected
+  flexible?: boolean; // true = bendable; absent or false means a rigid framed panel
 };
+
+/**
+ * Which kinds of panel a surface will carry. A curved or thin sidewall may take only
+ * flexible panels, a framed roof rack only rigid ones, and many surfaces take either.
+ */
+export type AllowedPanels = 'rigid' | 'flexible' | 'both';
 
 /**
  * One area panels can be placed on — a roof, a sidewall, a garage hatch. Every surface
@@ -27,6 +34,7 @@ export type Surface = {
   width: number; // cm
   height: number; // cm
   keepOuts: KeepOut[];
+  allowedPanels: AllowedPanels;
 };
 
 export type Config = {
