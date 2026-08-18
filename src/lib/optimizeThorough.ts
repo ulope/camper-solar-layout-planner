@@ -1,4 +1,4 @@
-import type { Config, Layout, PanelOption, Placement, Rect } from './types';
+import type { Layout, PanelOption, Placement, Rect, SurfaceTask } from './types';
 import { overlaps } from './geometry';
 import { packInOrder, splitFree, prune, type FitRule } from './packing';
 import {
@@ -65,12 +65,11 @@ function localSearch(
   start: Placement[],
   geom: Rect[],
   valid: PanelOption[],
-  config: Config,
+  config: SurfaceTask,
   rng: () => number,
   steps: number,
 ): Placement[] {
   const gap = config.panelGap;
-  const roof = config.roof;
   let current = start;
   let currentPower = totalPower(current);
   let best = start;
@@ -78,10 +77,10 @@ function localSearch(
 
   for (let step = 0; step < steps; step++) {
     const ruin: Rect = {
-      x: rng() * roof.width,
-      y: rng() * roof.height,
-      w: (0.2 + rng() * 0.5) * roof.width,
-      h: (0.2 + rng() * 0.5) * roof.height,
+      x: rng() * config.width,
+      y: rng() * config.height,
+      w: (0.2 + rng() * 0.5) * config.width,
+      h: (0.2 + rng() * 0.5) * config.height,
     };
     const survivors = current.filter((p) => !overlaps({ x: p.x, y: p.y, w: p.w, h: p.h }, ruin));
     if (survivors.length === current.length) continue; // nothing removed
@@ -177,7 +176,7 @@ const ISLANDS = 2;
  * compositions by total Wp, reusing the MaxRects packer and tightened geometries
  * from {@link ./optimize}.
  */
-export function optimizeThorough(config: Config, opts: ThoroughOpts = {}): Layout[] {
+export function optimizeThorough(config: SurfaceTask, opts: ThoroughOpts = {}): Layout[] {
   const {
     budgetMs = 5000,
     maxIterations = Infinity,

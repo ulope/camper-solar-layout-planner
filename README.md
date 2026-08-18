@@ -1,9 +1,10 @@
 # Camper Solar Layout Planner
 
-A browser-only web app for planning solar-panel placement on a camping-vehicle roof.
-Define the usable roof area, mark keep-out zones (hatches, vents, antennas, etc), enter a
-catalog of candidate panel models, and the app computes and visually displays an
-optimized selection and placement that **maximizes total watt-peak (Wp)**.
+A browser-only web app for planning solar-panel placement on a camping vehicle.
+Define one or more usable surfaces (roof, sidewalls, …), mark keep-out zones (hatches,
+vents, antennas, etc), enter a catalog of candidate panel models, and the app computes and
+visually displays an optimized selection and placement that
+**maximizes total watt-peak (Wp)**.
 
 
 https://ulope.github.io/camper-solar-layout-planner/
@@ -32,16 +33,20 @@ https://ulope.github.io/camper-solar-layout-planner/
 
 ## Features
 
-- **Roof dimensions** — length × width (cm) with configurable edge margin and
-  inter-panel gap.
-- **Keep-out areas** — add by dragging on the canvas or via the list; **drag to move**
-  and **drag edges/corners to resize**. Each shows its live size, and while dragging or
-  resizing, golden guide lines mark the edge positions and the clearance to each roof
-  edge.
+- **Surfaces** — plan any number of surfaces at once (roof plus one or two sidewalls,
+  say), each with its own name, length × width (cm) and keep-outs. They are drawn stacked
+  vertically on one canvas and all are optimized together. Edge margin and inter-panel gap
+  are configured once and apply to every surface.
+- **Keep-out areas** — belong to a surface; add by dragging on that surface in the canvas
+  or via the list, **drag to move** and **drag edges/corners to resize**. Each shows its
+  live size, and while dragging or resizing, golden guide lines mark the edge positions and
+  the clearance to each edge of the surface it sits on.
 - **Grid snapping** — optional snap (Off / 1 / 5 / 10 cm) for all canvas edits, with a
   grid overlay at the coarser steps.
-- **Canvas** — rulers on both axes, a mouse-position crosshair with a live cm readout,
-  and color-coded panels labeled with model name and Wp.
+- **Canvas** — all surfaces stacked vertically and labeled, with the one the sidebar
+  edits highlighted. Rulers on both axes (the vertical one restarts at 0 per surface, so
+  every reading is in that surface's own coordinates), a mouse-position crosshair with a
+  live cm readout, and color-coded panels labeled with model name and Wp.
 - **Panel catalog** — any number of models (name, length, width, power in Wp), listed as
   compact one-line entries; click one to edit it in a dialog. Optional **voltage** and
   **current** enable a series/parallel wiring readout, and optional **weight** and
@@ -59,7 +64,10 @@ https://ulope.github.io/camper-solar-layout-planner/
   later criterion decides between layouts within the tolerance of the earlier criterion's
   best value. Models missing a weight or price count as zero for that criterion, and the
   picker says how many are missing.
-- **Results** — up to 5 distinct layout options (plus the highest-Wp layout as an extra
+- **Results** — with more than one surface, a **combined** card totals the Wp, panel
+  count, weight and price of the options currently selected across all surfaces, and each
+  surface then gets its own section whose option you pick independently. Per surface, up to
+  5 distinct layout options (plus the highest-Wp layout as an extra
   entry when secondary criteria pushed it out of the top five), each showing total Wp, panel count,
   coverage, used area, **total weight and price**, and a per-model breakdown ordered
   by Wp. A total is shown as `—` when no placed model carries that field and prefixed with
@@ -70,14 +78,18 @@ https://ulope.github.io/camper-solar-layout-planner/
   and current set, the box also lists the **series** and **parallel** voltage/current for
   that many identical panels.
 - **Autosave** — the full configuration is saved to the Browser's `localStorage` and restored on reload.
-- **Import / Export** — share or back up a configuration as JSON.
+- **Import / Export** — share or back up a configuration as JSON. Files exported by
+  earlier single-roof versions still import: the roof becomes the first surface, keeping
+  its keep-outs.
 
 
 
 ## How the optimizer works
 
-The usable area is the roof inset by the edge margin, with each keep-out removed,
-producing a set of free rectangles. Panels are packed as gap-inclusive footprints and
+Each surface is packed independently — no placement constraint crosses a surface
+boundary, so optimizing each on its own and summing gives the joint best total Wp. Per
+surface, the usable area is the surface inset by the edge margin, with each keep-out
+removed, producing a set of free rectangles. Panels are packed as gap-inclusive footprints and
 centered within them (so a panel can sit flush against a boundary). A greedy MaxRects
 packer fills the rectangles trying both orientations per placement.
 

@@ -2,14 +2,16 @@
   import { onMount } from 'svelte';
   import {
     config,
-    layout,
+    selectedLayouts,
     layoutStale,
+    activeSurfaceId,
     selectedKeepOut,
     addKeepOut,
     updateKeepOut,
   } from '../lib/stores';
   import { panelColor } from '../lib/colors';
   import { snap } from '../lib/geometry';
+  import { surfaceColumn, columnExtent, surfaceAtPoint, type PlacedSurface } from '../lib/surfaces';
   import type { Rect } from '../lib/types';
 
   let canvas: HTMLCanvasElement;
@@ -24,6 +26,7 @@
   let mode: Mode = $state('idle');
   let dragStart: { x: number; y: number } | null = null;
   let dragRect: Rect | null = $state(null);
+  let dragSurfaceId: string | null = $state(null); // surface a new keep-out is being drawn on
   let moveId: string | null = null;
   let moveOffset = { x: 0, y: 0 };
   let resizeId: string | null = null;
@@ -32,26 +35,33 @@
   const HANDLE_TOL = 7; // px proximity to a keep-out edge to grab a resize handle
   const MIN_KO = 2; // minimum keep-out size, cm
   const GUIDE = '#ffd23f'; // contrasting color for drag/resize extent guides
-  // Pointer position: px/py are canvas pixels, cx/cy are roof centimeters.
+  // Pointer position: px/py are canvas pixels, cx/cy are world centimeters.
   let pointer: { px: number; py: number; cx: number; cy: number } | null = $state(null);
 
   const RULER = 30; // gutter thickness for the rulers, px
-  const PAD = 18; // padding between rulers and roof
+  const PAD = 18; // padding between rulers and the surface stack
+
+  /**
+   * Surfaces stacked top to bottom in world space. Everything below works in world
+   * centimeters; a surface's own coordinates are world minus its `y0` (surfaces are
+   * left-aligned, so x needs no offset).
+   */
+  const column = $derived(surfaceColumn($config.surfaces));
+  const extent = $derived(columnExtent(column));
 
   function view() {
-    const roof = $config.roof;
     const availW = cw - RULER - PAD * 2;
     const availH = ch - RULER - PAD * 2;
-    const scale = Math.min(availW / roof.width, availH / roof.height) || 1;
-    const offX = RULER + PAD + Math.max(0, (availW - roof.width * scale) / 2);
-    const offY = RULER + PAD + Math.max(0, (availH - roof.height * scale) / 2);
+    const scale = Math.min(availW / extent.w, availH / extent.h) || 1;
+    const offX = RULER + PAD + Math.max(0, (availW - extent.w * scale) / 2);
+    const offY = RULER + PAD + Math.max(0, (availH - extent.h * scale) / 2);
     return { scale, offX, offY };
   }
 
   const toPxX = (x: number, v = view()) => v.offX + x * v.scale;
   const toPxY = (y: number, v = view()) => v.offY + y * v.scale;
 
-  /** Raw centimeter coordinates under the pointer (unclamped). */
+  /** Raw world centimeter coordinates under the pointer (unclamped). */
   function cmAt(clientX: number, clientY: number) {
     const r = canvas.getBoundingClientRect();
     const v = view();
@@ -63,17 +73,29 @@
   /** The active snap step in cm (0 = off → whole-cm rounding). */
   const step = () => $config.gridSnap;
 
-  function clampedCm(clientX: number, clientY: number) {
+  /** Placed surface under a world point, or null in the gaps between surfaces. */
+  const placedAt = (wx: number, wy: number) => surfaceAtPoint(column, wx, wy);
+
+  const placedById = (id: string | null) => column.find((p) => p.surface.id === id) ?? null;
+
+  /** Placed surface owning a keep-out id, or null. */
+  function placedOfKeepOut(keepOutId: string | null): PlacedSurface | null {
+    if (!keepOutId) return null;
+    return column.find((p) => p.surface.keepOuts.some((k) => k.id === keepOutId)) ?? null;
+  }
+
+  /** Pointer position in one surface's local cm, snapped and clamped to its bounds. */
+  function clampedLocal(clientX: number, clientY: number, placed: PlacedSurface) {
     const c = cmAt(clientX, clientY);
     return {
-      x: snap(clampNum(c.x, 0, $config.roof.width), step()),
-      y: snap(clampNum(c.y, 0, $config.roof.height), step()),
+      x: snap(clampNum(c.x, 0, placed.surface.width), step()),
+      y: snap(clampNum(c.y - placed.y0, 0, placed.surface.height), step()),
     };
   }
 
-  /** Top-most keep-out id at the given cm point, or null. */
-  function keepOutAtCm(x: number, y: number): string | null {
-    const kos = $config.keepOuts;
+  /** Top-most keep-out id at a local point on one surface, or null. */
+  function keepOutAtLocal(placed: PlacedSurface, x: number, y: number): string | null {
+    const kos = placed.surface.keepOuts;
     for (let i = kos.length - 1; i >= 0; i--) {
       const k = kos[i];
       if (x >= k.x && x <= k.x + k.w && y >= k.y && y <= k.y + k.h) return k.id;
@@ -84,22 +106,23 @@
   /**
    * Resize handle under the pointer, if any. Works in pixel space with a small
    * tolerance, testing keep-outs top-most first (the selected one wins ties) so the
-   * affordance matches what's drawn on top.
+   * affordance matches what's drawn on top. Every surface is hit-tested, so a handle can
+   * be grabbed without first selecting its surface.
    */
   function handleAt(px: number, py: number): { id: string; handle: Handle } | null {
     const v = view();
-    const kos = $config.keepOuts;
-    const order = [...kos].sort((a, b) => {
-      if (a.id === $selectedKeepOut) return 1; // selected last → tested first
-      if (b.id === $selectedKeepOut) return -1;
+    const all = column.flatMap((p) => p.surface.keepOuts.map((k) => ({ k, y0: p.y0 })));
+    const order = all.sort((a, b) => {
+      if (a.k.id === $selectedKeepOut) return 1; // selected last → tested first
+      if (b.k.id === $selectedKeepOut) return -1;
       return 0;
     });
     for (let i = order.length - 1; i >= 0; i--) {
-      const k = order[i];
+      const { k, y0 } = order[i];
       const x1 = toPxX(k.x, v);
-      const y1 = toPxY(k.y, v);
+      const y1 = toPxY(y0 + k.y, v);
       const x2 = toPxX(k.x + k.w, v);
-      const y2 = toPxY(k.y + k.h, v);
+      const y2 = toPxY(y0 + k.y + k.h, v);
       // Only consider the pointer if it's within the rect's band (plus tolerance).
       if (px < x1 - HANDLE_TOL || px > x2 + HANDLE_TOL) continue;
       if (py < y1 - HANDLE_TOL || py > y2 + HANDLE_TOL) continue;
@@ -142,10 +165,17 @@
     return steps.find((s) => s >= minCm) ?? steps[steps.length - 1];
   }
 
+  /**
+   * Rulers. The top one is a single scale — surfaces are left-aligned at x = 0, so one
+   * horizontal scale is correct for all of them. The left one restarts at 0 for each
+   * surface and leaves the gaps blank, so its labels match the surface-local coordinates
+   * shown everywhere else (keep-out list, guide chips).
+   */
   function drawRulers(ctx: CanvasRenderingContext2D, v: ReturnType<typeof view>) {
-    const roof = $config.roof;
-    const step = niceStep(v.scale);
-    const minor = step / (step % 5 === 0 ? 5 : 2);
+    const stepCm = niceStep(v.scale);
+    const minor = stepCm / (stepCm % 5 === 0 ? 5 : 2);
+    const isMajor = (cm: number) =>
+      Math.abs(cm % stepCm) < 0.001 || Math.abs((cm % stepCm) - stepCm) < 0.001;
 
     ctx.fillStyle = '#161d26';
     ctx.fillRect(0, 0, cw, RULER); // top ruler
@@ -163,13 +193,13 @@
     ctx.strokeStyle = '#4a5a6b';
     ctx.font = '9px system-ui, sans-serif';
 
-    // Top ruler (horizontal scale).
+    // Top ruler (horizontal scale, shared by every surface).
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    for (let cm = 0; cm <= roof.width + 0.001; cm += minor) {
+    for (let cm = 0; cm <= extent.w + 0.001; cm += minor) {
       const px = toPxX(cm, v);
       if (px < RULER || px > cw) continue;
-      const major = Math.abs(cm % step) < 0.001 || Math.abs((cm % step) - step) < 0.001;
+      const major = isMajor(cm);
       ctx.beginPath();
       ctx.moveTo(px + 0.5, RULER - (major ? 9 : 5));
       ctx.lineTo(px + 0.5, RULER);
@@ -177,18 +207,20 @@
       if (major) ctx.fillText(String(Math.round(cm)), px, 3);
     }
 
-    // Left ruler (vertical scale).
+    // Left ruler (vertical scale, restarting per surface).
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    for (let cm = 0; cm <= roof.height + 0.001; cm += minor) {
-      const py = toPxY(cm, v);
-      if (py < RULER || py > ch) continue;
-      const major = Math.abs(cm % step) < 0.001 || Math.abs((cm % step) - step) < 0.001;
-      ctx.beginPath();
-      ctx.moveTo(RULER - (major ? 9 : 5), py + 0.5);
-      ctx.lineTo(RULER, py + 0.5);
-      ctx.stroke();
-      if (major) ctx.fillText(String(Math.round(cm)), RULER / 2, py);
+    for (const p of column) {
+      for (let cm = 0; cm <= p.surface.height + 0.001; cm += minor) {
+        const py = toPxY(p.y0 + cm, v);
+        if (py < RULER || py > ch) continue;
+        const major = isMajor(cm);
+        ctx.beginPath();
+        ctx.moveTo(RULER - (major ? 9 : 5), py + 0.5);
+        ctx.lineTo(RULER, py + 0.5);
+        ctx.stroke();
+        if (major) ctx.fillText(String(Math.round(cm)), RULER / 2, py);
+      }
     }
 
     // Corner unit label.
@@ -203,20 +235,20 @@
 
   function drawCrosshair(ctx: CanvasRenderingContext2D, v: ReturnType<typeof view>) {
     if (!pointer) return;
-    const roof = $config.roof;
-    if (pointer.cx < 0 || pointer.cx > roof.width || pointer.cy < 0 || pointer.cy > roof.height)
-      return;
+    const placed = placedAt(pointer.cx, pointer.cy);
+    if (!placed) return; // in a gap between surfaces — nothing to measure against
 
     const x = toPxX(pointer.cx, v);
     const y = toPxY(pointer.cy, v);
-    const bottom = toPxY(roof.height, v);
-    const right = toPxX(roof.width, v);
+    const top = toPxY(placed.y0, v);
+    const bottom = toPxY(placed.y0 + placed.surface.height, v);
+    const right = toPxX(placed.surface.width, v);
 
     ctx.strokeStyle = 'rgba(74, 158, 255, 0.6)';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 3]);
     ctx.beginPath();
-    ctx.moveTo(x + 0.5, RULER);
+    ctx.moveTo(x + 0.5, top);
     ctx.lineTo(x + 0.5, bottom);
     ctx.moveTo(RULER, y + 0.5);
     ctx.lineTo(right, y + 0.5);
@@ -238,8 +270,8 @@
     ctx.closePath();
     ctx.fill();
 
-    // Floating readout near the cursor.
-    const label = `${Math.round(pointer.cx)}, ${Math.round(pointer.cy)} cm`;
+    // Floating readout near the cursor, in the surface's own coordinates.
+    const label = `${Math.round(pointer.cx)}, ${Math.round(pointer.cy - placed.y0)} cm`;
     ctx.font = '600 11px system-ui, sans-serif';
     const tw = ctx.measureText(label).width;
     let bx = x + 10;
@@ -262,10 +294,19 @@
   type EdgeX = { cm: number; side: 'left' | 'right' };
   type EdgeY = { cm: number; side: 'top' | 'bottom' };
 
-  /** The rect being interacted with and which edges are changing, or null. */
-  function activeExtents(): { rect: Rect; xs: EdgeX[]; ys: EdgeY[] } | null {
-    const all = (r: Rect) => ({
+  /**
+   * The rect being interacted with, which edges are changing, and the surface it belongs
+   * to. Coordinates are surface-local.
+   */
+  function activeExtents(): {
+    rect: Rect;
+    xs: EdgeX[];
+    ys: EdgeY[];
+    placed: PlacedSurface;
+  } | null {
+    const all = (r: Rect, placed: PlacedSurface) => ({
       rect: r,
+      placed,
       xs: [
         { cm: r.x, side: 'left' as const },
         { cm: r.x + r.w, side: 'right' as const },
@@ -275,21 +316,26 @@
         { cm: r.y + r.h, side: 'bottom' as const },
       ],
     });
-    if (mode === 'draw' && dragRect) return all(dragRect);
+    if (mode === 'draw' && dragRect) {
+      const placed = placedById(dragSurfaceId);
+      if (placed) return all(dragRect, placed);
+    }
     if (mode === 'move' && moveId) {
-      const k = $config.keepOuts.find((o) => o.id === moveId);
-      if (k) return all(k);
+      const placed = placedOfKeepOut(moveId);
+      const k = placed?.surface.keepOuts.find((o) => o.id === moveId);
+      if (placed && k) return all(k, placed);
     }
     if (mode === 'resize' && resizeId && resizeHandle) {
-      const k = $config.keepOuts.find((o) => o.id === resizeId);
-      if (k) {
+      const placed = placedOfKeepOut(resizeId);
+      const k = placed?.surface.keepOuts.find((o) => o.id === resizeId);
+      if (placed && k) {
         const xs: EdgeX[] = [];
         const ys: EdgeY[] = [];
         if (resizeHandle.includes('w')) xs.push({ cm: k.x, side: 'left' });
         if (resizeHandle.includes('e')) xs.push({ cm: k.x + k.w, side: 'right' });
         if (resizeHandle.includes('n')) ys.push({ cm: k.y, side: 'top' });
         if (resizeHandle.includes('s')) ys.push({ cm: k.y + k.h, side: 'bottom' });
-        return { rect: k, xs, ys };
+        return { rect: k, xs, ys, placed };
       }
     }
     return null;
@@ -321,14 +367,17 @@
     ctx.fillText(text, cx, cy + 0.5);
   }
 
-  /** Draw extent guide lines, edge-position chips on the rulers, and roof-clearance chips. */
+  /**
+   * Extent guide lines, edge-position chips on the rulers, and clearance chips. All
+   * distances are to the *owning* surface's edges, and the guides stay inside it.
+   */
   function drawExtents(ctx: CanvasRenderingContext2D, v: ReturnType<typeof view>) {
     const ext = activeExtents();
     if (!ext) return;
-    const roof = $config.roof;
-    const bottom = toPxY(roof.height, v);
-    const right = toPxX(roof.width, v);
-    const midY = toPxY(ext.rect.y + ext.rect.h / 2, v); // keep-out center, for x-edge gaps
+    const { surface, y0 } = ext.placed;
+    const bottom = toPxY(y0 + surface.height, v);
+    const right = toPxX(surface.width, v);
+    const midY = toPxY(y0 + ext.rect.y + ext.rect.h / 2, v); // keep-out center, for x-edge gaps
     const midX = toPxX(ext.rect.x + ext.rect.w / 2, v); // keep-out center, for y-edge gaps
 
     ctx.strokeStyle = GUIDE;
@@ -341,53 +390,56 @@
       ctx.lineTo(x, bottom);
     }
     for (const e of ext.ys) {
-      const y = toPxY(e.cm, v) + 0.5;
+      const y = toPxY(y0 + e.cm, v) + 0.5;
       ctx.moveTo(RULER, y);
       ctx.lineTo(right, y);
     }
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Position chips centered on the gutter rulers; distance chips in the gap to the roof edge.
+    // Position chips centered on the gutter rulers; distance chips in the gap to the edge.
     for (const e of ext.xs) {
       guideChip(ctx, String(Math.round(e.cm)), toPxX(e.cm, v), RULER / 2);
-      const dist = e.side === 'left' ? e.cm : roof.width - e.cm;
-      const gapMid = e.side === 'left' ? e.cm / 2 : (e.cm + roof.width) / 2;
+      const dist = e.side === 'left' ? e.cm : surface.width - e.cm;
+      const gapMid = e.side === 'left' ? e.cm / 2 : (e.cm + surface.width) / 2;
       guideChip(ctx, `↔ ${Math.round(dist)}`, toPxX(gapMid, v), midY, 'dist');
     }
     for (const e of ext.ys) {
-      guideChip(ctx, String(Math.round(e.cm)), RULER / 2, toPxY(e.cm, v));
-      const dist = e.side === 'top' ? e.cm : roof.height - e.cm;
-      const gapMid = e.side === 'top' ? e.cm / 2 : (e.cm + roof.height) / 2;
-      guideChip(ctx, `↕ ${Math.round(dist)}`, midX, toPxY(gapMid, v), 'dist');
+      guideChip(ctx, String(Math.round(e.cm)), RULER / 2, toPxY(y0 + e.cm, v));
+      const dist = e.side === 'top' ? e.cm : surface.height - e.cm;
+      const gapMid = e.side === 'top' ? e.cm / 2 : (e.cm + surface.height) / 2;
+      guideChip(ctx, `↕ ${Math.round(dist)}`, midX, toPxY(y0 + gapMid, v), 'dist');
     }
   }
 
-  function draw() {
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = cw * dpr;
-    canvas.height = ch * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, cw, ch);
+  /** One surface: body, margin outline, grid, panels, keep-outs, name label. */
+  function drawSurface(
+    ctx: CanvasRenderingContext2D,
+    v: ReturnType<typeof view>,
+    placed: PlacedSurface,
+  ) {
+    const { surface, y0 } = placed;
+    if (surface.width <= 0 || surface.height <= 0) return;
+    const active = surface.id === $activeSurfaceId;
+    const ox = toPxX(0, v);
+    const oy = toPxY(y0, v);
+    const rw = surface.width * v.scale;
+    const rh = surface.height * v.scale;
 
-    const roof = $config.roof;
-    const v = view();
-    if (roof.width <= 0 || roof.height <= 0) {
-      drawRulers(ctx, v);
-      return;
-    }
+    // Name label, in the gap above the surface.
+    ctx.font = '600 12px system-ui, sans-serif';
+    ctx.fillStyle = active ? '#f5a623' : '#8b98a5';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(surface.name, ox, oy - 5);
 
-    // Roof body.
+    // Body. The active surface is outlined in the accent color so the sidebar forms and
+    // the canvas agree on what is being edited.
     ctx.fillStyle = '#11161d';
-    ctx.strokeStyle = '#3d4d5e';
+    ctx.strokeStyle = active ? '#f5a623' : '#3d4d5e';
     ctx.lineWidth = 2;
-    const rw = roof.width * v.scale;
-    const rh = roof.height * v.scale;
-    ctx.fillRect(v.offX, v.offY, rw, rh);
-    ctx.strokeRect(v.offX, v.offY, rw, rh);
+    ctx.fillRect(ox, oy, rw, rh);
+    ctx.strokeRect(ox, oy, rw, rh);
 
     // Edge-margin outline.
     if ($config.edgeMargin > 0) {
@@ -396,9 +448,9 @@
       ctx.lineWidth = 1;
       ctx.strokeRect(
         toPxX($config.edgeMargin, v),
-        toPxY($config.edgeMargin, v),
-        Math.max(0, roof.width - 2 * $config.edgeMargin) * v.scale,
-        Math.max(0, roof.height - 2 * $config.edgeMargin) * v.scale,
+        toPxY(y0 + $config.edgeMargin, v),
+        Math.max(0, surface.width - 2 * $config.edgeMargin) * v.scale,
+        Math.max(0, surface.height - 2 * $config.edgeMargin) * v.scale,
       );
       ctx.setLineDash([]);
     }
@@ -408,25 +460,25 @@
       ctx.strokeStyle = 'rgba(123, 138, 153, 0.12)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (let cm = $config.gridSnap; cm < roof.width; cm += $config.gridSnap) {
+      for (let cm = $config.gridSnap; cm < surface.width; cm += $config.gridSnap) {
         const x = Math.round(toPxX(cm, v)) + 0.5;
-        ctx.moveTo(x, v.offY);
-        ctx.lineTo(x, v.offY + rh);
+        ctx.moveTo(x, oy);
+        ctx.lineTo(x, oy + rh);
       }
-      for (let cm = $config.gridSnap; cm < roof.height; cm += $config.gridSnap) {
-        const y = Math.round(toPxY(cm, v)) + 0.5;
-        ctx.moveTo(v.offX, y);
-        ctx.lineTo(v.offX + rw, y);
+      for (let cm = $config.gridSnap; cm < surface.height; cm += $config.gridSnap) {
+        const y = Math.round(toPxY(y0 + cm, v)) + 0.5;
+        ctx.moveTo(ox, y);
+        ctx.lineTo(ox + rw, y);
       }
       ctx.stroke();
     }
 
-    // Placed panels.
-    const placements = $layout?.placements ?? [];
+    // Placed panels for this surface's currently selected option.
+    const placements = $selectedLayouts[surface.id]?.placements ?? [];
     for (const p of placements) {
       const color = colorForOption(p.optionId);
       const px = toPxX(p.x, v);
-      const py = toPxY(p.y, v);
+      const py = toPxY(y0 + p.y, v);
       const pw = p.w * v.scale;
       const ph = p.h * v.scale;
       ctx.fillStyle = color + 'cc';
@@ -454,9 +506,9 @@
     }
 
     // Keep-outs (drawn on top so they are always visible).
-    for (const ko of $config.keepOuts) {
+    for (const ko of surface.keepOuts) {
       const kx = toPxX(ko.x, v);
-      const ky = toPxY(ko.y, v);
+      const ky = toPxY(y0 + ko.y, v);
       const kw = ko.w * v.scale;
       const kh = ko.h * v.scale;
       ctx.fillStyle = 'rgba(229, 83, 75, 0.22)';
@@ -482,7 +534,8 @@
         // Label + live size on a dark backing plate so they stay legible over the
         // red hatching.
         const lines: { text: string; font: string; color: string }[] = [];
-        if (ko.label) lines.push({ text: ko.label, font: '600 11px system-ui, sans-serif', color: '#ffe3df' });
+        if (ko.label)
+          lines.push({ text: ko.label, font: '600 11px system-ui, sans-serif', color: '#ffe3df' });
         if (kh > 26 || !ko.label) {
           lines.push({
             text: `${Math.round(ko.w)} × ${Math.round(ko.h)} cm`,
@@ -534,15 +587,37 @@
         }
       }
     }
+  }
 
-    // Drag-to-draw preview.
-    if (dragRect) {
+  function draw() {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = cw * dpr;
+    canvas.height = ch * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cw, ch);
+
+    const v = view();
+    if (extent.w <= 0 || extent.h <= 0) {
+      drawRulers(ctx, v);
+      return;
+    }
+
+    for (const placed of column) drawSurface(ctx, v, placed);
+
+    // Drag-to-draw preview, on the surface the drag started from.
+    const drawingOn = placedById(dragSurfaceId);
+    if (dragRect && drawingOn) {
       ctx.fillStyle = 'rgba(229, 83, 75, 0.18)';
       ctx.strokeStyle = '#e5534b';
       ctx.setLineDash([5, 4]);
       ctx.lineWidth = 1.5;
-      ctx.fillRect(toPxX(dragRect.x, v), toPxY(dragRect.y, v), dragRect.w * v.scale, dragRect.h * v.scale);
-      ctx.strokeRect(toPxX(dragRect.x, v), toPxY(dragRect.y, v), dragRect.w * v.scale, dragRect.h * v.scale);
+      const dx = toPxX(dragRect.x, v);
+      const dy = toPxY(drawingOn.y0 + dragRect.y, v);
+      ctx.fillRect(dx, dy, dragRect.w * v.scale, dragRect.h * v.scale);
+      ctx.strokeRect(dx, dy, dragRect.w * v.scale, dragRect.h * v.scale);
       ctx.setLineDash([]);
     }
 
@@ -554,7 +629,7 @@
 
   // Redraw whenever inputs change.
   $effect(() => {
-    void [$config, $layout, $selectedKeepOut, dragRect, pointer, mode, cw, ch];
+    void [$config, $selectedLayouts, $selectedKeepOut, $activeSurfaceId, dragRect, pointer, mode, cw, ch];
     draw();
   });
 
@@ -574,24 +649,36 @@
       resizeId = grab.id;
       resizeHandle = grab.handle;
       selectedKeepOut.set(grab.id);
+      const owner = placedOfKeepOut(grab.id);
+      if (owner) activeSurfaceId.set(owner.surface.id);
       cursor = HANDLE_CURSOR[grab.handle];
       canvas.setPointerCapture(e.pointerId);
       return;
     }
+
     const raw = cmAt(e.clientX, e.clientY);
-    const hit = keepOutAtCm(raw.x, raw.y);
+    const placed = placedAt(raw.x, raw.y);
+    if (!placed) {
+      // A press in the gap between surfaces only clears the selection.
+      selectedKeepOut.set(null);
+      return;
+    }
+    activeSurfaceId.set(placed.surface.id);
+
+    const hit = keepOutAtLocal(placed, raw.x, raw.y - placed.y0);
     if (hit) {
       // Start moving an existing keep-out.
-      const ko = $config.keepOuts.find((k) => k.id === hit)!;
+      const ko = placed.surface.keepOuts.find((k) => k.id === hit)!;
       mode = 'move';
       moveId = hit;
-      moveOffset = { x: raw.x - ko.x, y: raw.y - ko.y };
+      moveOffset = { x: raw.x - ko.x, y: raw.y - placed.y0 - ko.y };
       selectedKeepOut.set(hit);
       cursor = 'grabbing';
     } else {
-      // Start drawing a new keep-out.
+      // Start drawing a new keep-out on this surface.
       mode = 'draw';
-      dragStart = clampedCm(e.clientX, e.clientY);
+      dragSurfaceId = placed.surface.id;
+      dragStart = clampedLocal(e.clientX, e.clientY, placed);
       dragRect = null;
       selectedKeepOut.set(null);
     }
@@ -602,20 +689,26 @@
     updatePointer(e);
 
     if (mode === 'draw' && dragStart) {
-      const { x: x2, y: y2 } = clampedCm(e.clientX, e.clientY);
-      dragRect = {
-        x: Math.min(dragStart.x, x2),
-        y: Math.min(dragStart.y, y2),
-        w: Math.abs(x2 - dragStart.x),
-        h: Math.abs(y2 - dragStart.y),
-      };
+      const placed = placedById(dragSurfaceId);
+      if (placed) {
+        const { x: x2, y: y2 } = clampedLocal(e.clientX, e.clientY, placed);
+        dragRect = {
+          x: Math.min(dragStart.x, x2),
+          y: Math.min(dragStart.y, y2),
+          w: Math.abs(x2 - dragStart.x),
+          h: Math.abs(y2 - dragStart.y),
+        };
+      }
     } else if (mode === 'move' && moveId) {
-      const roof = $config.roof;
-      const ko = $config.keepOuts.find((k) => k.id === moveId);
-      if (ko) {
+      const placed = placedOfKeepOut(moveId);
+      const ko = placed?.surface.keepOuts.find((k) => k.id === moveId);
+      if (placed && ko) {
         const raw = cmAt(e.clientX, e.clientY);
-        const x = snap(clampNum(raw.x - moveOffset.x, 0, roof.width - ko.w), step());
-        const y = snap(clampNum(raw.y - moveOffset.y, 0, roof.height - ko.h), step());
+        const x = snap(clampNum(raw.x - moveOffset.x, 0, placed.surface.width - ko.w), step());
+        const y = snap(
+          clampNum(raw.y - placed.y0 - moveOffset.y, 0, placed.surface.height - ko.h),
+          step(),
+        );
         updateKeepOut(moveId, { x, y });
       }
     } else if (mode === 'resize' && resizeId && resizeHandle) {
@@ -627,17 +720,19 @@
       if (grab) cursor = HANDLE_CURSOR[grab.handle];
       else {
         const raw = cmAt(e.clientX, e.clientY);
-        cursor = keepOutAtCm(raw.x, raw.y) ? 'grab' : 'crosshair';
+        const placed = placedAt(raw.x, raw.y);
+        if (!placed) cursor = 'default';
+        else cursor = keepOutAtLocal(placed, raw.x, raw.y - placed.y0) ? 'grab' : 'crosshair';
       }
     }
   }
 
   /** Apply a resize-drag to the active keep-out, moving only the handle's edges. */
   function resize(e: PointerEvent) {
-    const roof = $config.roof;
-    const ko = $config.keepOuts.find((k) => k.id === resizeId);
-    if (!ko || !resizeHandle) return;
-    const p = clampedCm(e.clientX, e.clientY); // snapped, clamped to roof
+    const placed = placedOfKeepOut(resizeId);
+    const ko = placed?.surface.keepOuts.find((k) => k.id === resizeId);
+    if (!placed || !ko || !resizeHandle) return;
+    const p = clampedLocal(e.clientX, e.clientY, placed); // snapped, clamped to the surface
     let { x, y, w, h } = ko;
     if (resizeHandle.includes('w')) {
       const right = ko.x + ko.w;
@@ -657,13 +752,14 @@
   }
 
   function onPointerUp() {
-    if (mode === 'draw' && dragRect && dragRect.w >= 2 && dragRect.h >= 2) {
-      const id = addKeepOut(dragRect);
+    if (mode === 'draw' && dragRect && dragSurfaceId && dragRect.w >= 2 && dragRect.h >= 2) {
+      const id = addKeepOut(dragRect, dragSurfaceId);
       selectedKeepOut.set(id);
     }
     mode = 'idle';
     dragStart = null;
     dragRect = null;
+    dragSurfaceId = null;
     moveId = null;
     resizeId = null;
     resizeHandle = null;
@@ -673,6 +769,10 @@
   function onPointerLeave() {
     if (mode === 'idle') pointer = null;
   }
+
+  const anyPlacements = $derived(
+    $config.surfaces.some((s) => ($selectedLayouts[s.id]?.placements.length ?? 0) > 0),
+  );
 
   onMount(() => {
     const ro = new ResizeObserver(() => {
@@ -695,11 +795,11 @@
     onpointerup={onPointerUp}
     onpointerleave={onPointerLeave}
   ></canvas>
-  {#if $layoutStale && ($layout?.placements.length ?? 0) > 0}
+  {#if $layoutStale && anyPlacements}
     <div class="stale-badge">Config changed — re-run optimize</div>
   {/if}
   <div class="hint-overlay">
-    Drag empty roof to add a keep-out · drag a keep-out to move · drag its edges to resize
+    Drag a surface to add a keep-out · drag a keep-out to move · drag its edges to resize
   </div>
 </div>
 
@@ -728,11 +828,18 @@
     font-weight: 600;
     pointer-events: none;
   }
+  /* The stack can reach the bottom of the canvas, so the hint needs a backing plate to
+     stay legible where it overlaps a surface. */
   .hint-overlay {
     position: absolute;
     bottom: 10px;
     left: 50%;
     transform: translateX(-50%);
+    background: rgba(13, 17, 23, 0.82);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    white-space: nowrap;
     color: var(--text-dim);
     font-size: 12px;
     pointer-events: none;

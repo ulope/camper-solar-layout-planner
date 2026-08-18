@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import type { Config } from './types';
-import { optimizeThorough } from './optimizeThorough';
+import { optimizeThoroughAll } from './optimizeAll';
 import type { RankOptions } from './ranking';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -19,7 +19,7 @@ self.onmessage = (e: MessageEvent<InMsg>) => {
   }
   if (msg.type === 'run') {
     cancelled = false;
-    const layouts = optimizeThorough(msg.config, {
+    const resultsBySurface = optimizeThoroughAll(msg.config, {
       budgetMs: msg.budgetMs,
       seed: msg.seed,
       maxResults: 5,
@@ -27,6 +27,6 @@ self.onmessage = (e: MessageEvent<InMsg>) => {
       onProgress: (p) => self.postMessage({ type: 'progress', ...p }),
       shouldStop: () => cancelled,
     });
-    self.postMessage({ type: 'done', layouts });
+    self.postMessage({ type: 'done', resultsBySurface });
   }
 };

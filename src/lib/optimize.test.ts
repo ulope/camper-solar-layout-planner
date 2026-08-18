@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { optimize, optimizeVariants, buildFreeRects, usableArea } from './optimize';
+import { optimize, optimizeVariants, buildFreeRects, usableArea, taskFor } from './optimize';
 import { overlaps, contains } from './geometry';
+import { migrateConfig } from './persistence';
 import { layoutWeight, optionsById } from './ranking';
-import type { Config, PanelOption, Placement, Rect } from './types';
+import type { PanelOption, Placement, Rect, SurfaceTask } from './types';
 import layout4 from './__fixtures__/solar-layout-4.json';
 
 const panel = (id: string, width: number, height: number, power: number): PanelOption => ({
@@ -13,8 +14,9 @@ const panel = (id: string, width: number, height: number, power: number): PanelO
   power,
 });
 
-const baseConfig = (over: Partial<Config> = {}): Config => ({
-  roof: { width: 200, height: 100 },
+const baseConfig = (over: Partial<SurfaceTask> = {}): SurfaceTask => ({
+  width: 200,
+  height: 100,
   edgeMargin: 0,
   panelGap: 0,
   keepOuts: [],
@@ -124,7 +126,8 @@ describe('optimize', () => {
     // columns are the full roof height, so a 150-tall panel must fit there even
     // though it is taller than the keep-out's vertical band (23..135).
     const config = baseConfig({
-      roof: { width: 390, height: 153 },
+      width: 390,
+        height: 153,
       keepOuts: [{ id: 'k', x: 146, y: 23, w: 77, h: 112 }],
       panelOptions: [panel('tall', 60, 150, 300)],
     });
@@ -146,7 +149,8 @@ describe('optimize', () => {
     // so the optimizer prefers it.
     const layout = optimize(
       baseConfig({
-        roof: { width: 200, height: 40 },
+        width: 200,
+        height: 40,
         panelOptions: [panel('tall', 40, 100, 500)],
       }),
     );
@@ -230,7 +234,8 @@ describe('optimizeVariants', () => {
     // Adding an option can only widen the search; the best must not get worse.
     const cfg = (panels: ReturnType<typeof panel>[]) =>
       baseConfig({
-        roof: { width: 300, height: 150 },
+        width: 300,
+        height: 150,
         edgeMargin: 2,
         panelGap: 2,
         keepOuts: [{ id: 'k', x: 110, y: 50, w: 60, h: 50 }],
@@ -254,10 +259,11 @@ describe('optimizeVariants', () => {
     // Moving "Steg 1" from y=142 to y=143 (flush with the 153-high roof) frees space,
     // so the best must not drop. A pure greedy regressed 950 -> 855 here; tightened
     // geometries recover the optimum. Also assert every placement is valid.
-    const withSteg = (y: number): Config => {
-      const c: Config = JSON.parse(JSON.stringify(layout4));
-      c.keepOuts.find((k) => k.label === 'Steg 1')!.y = y;
-      return c;
+    const withSteg = (y: number): SurfaceTask => {
+      // The fixture is a v1 export, so it also exercises the migration on every run.
+      const c = migrateConfig(JSON.parse(JSON.stringify(layout4)))!;
+      c.surfaces[0].keepOuts.find((k) => k.label === 'Steg 1')!.y = y;
+      return taskFor(c, c.surfaces[0]);
     };
     const at142 = optimize(withSteg(142)).totalPower;
     const moved = optimize(withSteg(143));
@@ -266,7 +272,7 @@ describe('optimizeVariants', () => {
     const cfg = withSteg(143);
     for (const p of moved.placements) {
       const body: Rect = { x: p.x, y: p.y, w: p.w, h: p.h };
-      expect(contains({ x: 0, y: 0, w: cfg.roof.width, h: cfg.roof.height }, body)).toBe(true);
+      expect(contains({ x: 0, y: 0, w: cfg.width, h: cfg.height }, body)).toBe(true);
       for (const k of cfg.keepOuts) expect(overlaps(body, k)).toBe(false);
     }
     expectNoOverlaps(moved.placements);

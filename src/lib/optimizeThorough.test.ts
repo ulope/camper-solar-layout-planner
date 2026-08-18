@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { optimize } from './optimize';
+import { optimize, taskFor } from './optimize';
 import { optimizeThorough } from './optimizeThorough';
 import { overlaps, contains } from './geometry';
-import type { Config, PanelOption, Placement, Rect } from './types';
+import { migrateConfig } from './persistence';
+import type { Config, PanelOption, Placement, Rect, SurfaceTask } from './types';
 import layout4 from './__fixtures__/solar-layout-4.json';
 import layout11 from './__fixtures__/solar-layout-11.json';
 
@@ -14,11 +15,11 @@ const panel = (id: string, width: number, height: number, power: number): PanelO
   power,
 });
 
-const baseConfig = (over: Partial<Config> = {}): Config => ({
-  roof: { width: 200, height: 100 },
+const baseConfig = (over: Partial<SurfaceTask> = {}): SurfaceTask => ({
+  width: 200,
+  height: 100,
   edgeMargin: 0,
   panelGap: 0,
-  gridSnap: 1,
   keepOuts: [],
   panelOptions: [],
   ...over,
@@ -75,10 +76,11 @@ describe('optimizeThorough', () => {
   });
 
   it('is never worse than the fast optimizer (seeded by it)', () => {
-    const configs: Config[] = [
+    const configs: SurfaceTask[] = [
       baseConfig({ panelOptions: [panel('p', 100, 100, 100)] }), // exact tiling
       baseConfig({
-        roof: { width: 300, height: 150 },
+        width: 300,
+        height: 150,
         edgeMargin: 2,
         panelGap: 2,
         keepOuts: [{ id: 'k', x: 110, y: 50, w: 60, h: 50 }],
@@ -99,11 +101,11 @@ describe('optimizeThorough', () => {
   });
 
   it('matches or beats fast on the layout-4 regression (both Steg-1 positions)', () => {
-    const withSteg = (y: number): Config => {
-      const c = JSON.parse(JSON.stringify(layout4)) as Config;
-      c.gridSnap = 1;
-      c.keepOuts.find((k) => k.label === 'Steg 1')!.y = y;
-      return c;
+    const withSteg = (y: number): SurfaceTask => {
+      // The fixture is a v1 export, so it also exercises the migration on every run.
+      const c = migrateConfig(JSON.parse(JSON.stringify(layout4)))!;
+      c.surfaces[0].keepOuts.find((k) => k.label === 'Steg 1')!.y = y;
+      return taskFor(c, c.surfaces[0]);
     };
     for (const y of [142, 143]) {
       const cfg = withSteg(y);
@@ -112,7 +114,7 @@ describe('optimizeThorough', () => {
       expect(best.totalPower).toBeGreaterThanOrEqual(fast);
       expectNoOverlaps(best.placements);
       for (const p of best.placements) {
-        expect(contains({ x: 0, y: 0, w: cfg.roof.width, h: cfg.roof.height }, bodyRect(p))).toBe(true);
+        expect(contains({ x: 0, y: 0, w: cfg.width, h: cfg.height }, bodyRect(p))).toBe(true);
         for (const k of cfg.keepOuts) expect(overlaps(bodyRect(p), k)).toBe(false);
       }
     }
@@ -124,17 +126,18 @@ describe('optimizeThorough', () => {
     // the best power known for this roof.
     const scenarios: ((c: Config) => void)[] = [
       () => {},
-      (c) => void (c.keepOuts.find((k) => k.label === 'Fenster 1')!.x += 1),
+      (c) => void (c.surfaces[0].keepOuts.find((k) => k.label === 'Fenster 1')!.x += 1),
       (c) => void (c.panelOptions.find((p) => p.name === 'FDS050-12M-50Wp')!.enabled = true),
     ];
     for (const mutate of scenarios) {
-      const cfg = JSON.parse(JSON.stringify(layout11)) as Config;
-      mutate(cfg);
+      const config = migrateConfig(JSON.parse(JSON.stringify(layout11)))!;
+      mutate(config);
+      const cfg = taskFor(config, config.surfaces[0]);
       const best = optimizeThorough(cfg, { maxIterations: 800, budgetMs: Infinity, seed: 12345 })[0];
       expect(best.totalPower).toBeGreaterThanOrEqual(1140);
       expectNoOverlaps(best.placements);
       for (const p of best.placements) {
-        expect(contains({ x: 0, y: 0, w: cfg.roof.width, h: cfg.roof.height }, bodyRect(p))).toBe(true);
+        expect(contains({ x: 0, y: 0, w: cfg.width, h: cfg.height }, bodyRect(p))).toBe(true);
         for (const k of cfg.keepOuts) expect(overlaps(bodyRect(p), k)).toBe(false);
       }
     }

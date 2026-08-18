@@ -1,8 +1,7 @@
 import { writable, derived, get } from 'svelte/store';
-import type { Config, Layout, KeepOut, PanelOption } from './types';
+import type { Config, Layout, KeepOut, PanelOption, Surface, SurfaceResults } from './types';
 import { loadConfig, saveConfig } from './persistence';
-import { optimizeVariants } from './optimize';
-import { optimizeThorough } from './optimizeThorough';
+import { optimizeFastAll, optimizeThoroughAll } from './optimizeAll';
 import { ALL_CRITERIA, DEFAULT_RANK, type RankOptions, type SecondaryCriterion } from './ranking';
 import { isPanelEnabled } from './panels';
 
@@ -39,19 +38,39 @@ function loadRankOptions(): RankOptions {
   }
 }
 
+const initialConfig = loadConfig();
+
 /** The single source of truth for the planner, hydrated from localStorage. */
-export const config = writable<Config>(loadConfig());
+export const config = writable<Config>(initialConfig);
 
-/** Distinct optimization results, best first (empty until Optimize is run). */
-export const layouts = writable<Layout[]>([]);
+/**
+ * The surface the sidebar forms edit and new keep-outs belong to. Every surface is drawn
+ * and optimized at once; this only decides what the forms act on.
+ */
+export const activeSurfaceId = writable<string>(initialConfig.surfaces[0].id);
 
-/** Index of the result currently shown on the canvas. */
-export const selectedLayout = writable<number>(0);
+/** Distinct optimization results per surface, best first (empty until Optimize is run). */
+export const layoutsBySurface = writable<SurfaceResults>({});
 
-/** The layout currently displayed, or null when none has been computed. */
-export const layout = derived(
-  [layouts, selectedLayout],
-  ([$layouts, $i]) => $layouts[$i] ?? null,
+/** Index of the alternative currently shown, per surface. Surfaces are chosen freely. */
+export const selectedBySurface = writable<Record<string, number>>({});
+
+/** The layout displayed for each surface, or null where none has been computed. */
+export const selectedLayouts = derived(
+  [config, layoutsBySurface, selectedBySurface],
+  ([$config, $results, $selected]) => {
+    const out: Record<string, Layout | null> = {};
+    for (const s of $config.surfaces) {
+      out[s.id] = $results[s.id]?.[$selected[s.id] ?? 0] ?? null;
+    }
+    return out;
+  },
+);
+
+/** The surface the forms currently edit; falls back to the first one. */
+export const activeSurface = derived(
+  [config, activeSurfaceId],
+  ([$config, $id]) => $config.surfaces.find((s) => s.id === $id) ?? $config.surfaces[0],
 );
 
 /** Whether the current config has changed since the layouts were computed. */
@@ -101,29 +120,41 @@ export const panelDataGaps = derived(config, ($c) => {
 /** True while a thorough (worker) optimization is running. */
 export const optimizing = writable<boolean>(false);
 
-/** Live progress from a running thorough optimization. */
-export const optimizeProgress = writable<{ bestPower: number; elapsedMs: number }>({
-  bestPower: 0,
-  elapsedMs: 0,
-});
+/** Live progress from a running thorough optimization, across all surfaces. */
+export const optimizeProgress = writable<{
+  bestPower: number; // combined over every surface
+  elapsedMs: number;
+  surfaceIndex: number;
+  surfaceCount: number;
+  surfaceName: string;
+}>({ bestPower: 0, elapsedMs: 0, surfaceIndex: 0, surfaceCount: 1, surfaceName: '' });
 
 // Autosave: debounce writes back to localStorage on every config change.
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 config.subscribe((c) => {
   layoutStale.set(true);
+  // Keep the active surface pointing at one that still exists (import, reset, removal).
+  if (!c.surfaces.some((s) => s.id === get(activeSurfaceId))) {
+    activeSurfaceId.set(c.surfaces[0].id);
+  }
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => saveConfig(c), 250);
 });
 
-function applyResults(results: Layout[]): void {
-  layouts.set(results);
-  selectedLayout.set(0);
+function applyResults(results: SurfaceResults): void {
+  layoutsBySurface.set(results);
+  selectedBySurface.set(Object.fromEntries(Object.keys(results).map((id) => [id, 0])));
   layoutStale.set(false);
+}
+
+/** Show a different alternative for one surface, leaving the others as they are. */
+export function selectSurfaceLayout(surfaceId: string, index: number): void {
+  selectedBySurface.update((m) => ({ ...m, [surfaceId]: index }));
 }
 
 let worker: Worker | null = null;
 // Best layouts streamed so far from the worker, kept so Cancel can apply them.
-let streamedLayouts: Layout[] = [];
+let streamedResults: SurfaceResults | null = null;
 
 function disposeWorker(): void {
   if (worker) {
@@ -137,7 +168,7 @@ export function runOptimize(): void {
   if (get(optimizerEffort) === 'fast') {
     disposeWorker();
     optimizing.set(false);
-    applyResults(optimizeVariants(get(config), 5, get(rankOptions)));
+    applyResults(optimizeFastAll(get(config), 5, get(rankOptions)));
     return;
   }
   runThorough();
@@ -148,8 +179,14 @@ function runThorough(): void {
   disposeWorker();
   const cfg = get(config);
   const rank = get(rankOptions);
-  streamedLayouts = [];
-  optimizeProgress.set({ bestPower: 0, elapsedMs: 0 });
+  streamedResults = null;
+  optimizeProgress.set({
+    bestPower: 0,
+    elapsedMs: 0,
+    surfaceIndex: 0,
+    surfaceCount: cfg.surfaces.length,
+    surfaceName: cfg.surfaces[0].name,
+  });
   optimizing.set(true);
 
   try {
@@ -161,7 +198,7 @@ function runThorough(): void {
   if (!worker) {
     // No worker support: run synchronously (blocks, but still produces a result).
     applyResults(
-      optimizeThorough(cfg, { budgetMs: THOROUGH_BUDGET_MS, seed: THOROUGH_SEED, rank }),
+      optimizeThoroughAll(cfg, { budgetMs: THOROUGH_BUDGET_MS, seed: THOROUGH_SEED, rank }),
     );
     optimizing.set(false);
     return;
@@ -170,10 +207,16 @@ function runThorough(): void {
   worker.onmessage = (e: MessageEvent) => {
     const msg = e.data;
     if (msg.type === 'progress') {
-      optimizeProgress.set({ bestPower: msg.bestPower, elapsedMs: msg.elapsedMs });
-      if (msg.layouts?.length) streamedLayouts = msg.layouts as Layout[];
+      optimizeProgress.set({
+        bestPower: msg.bestPower,
+        elapsedMs: msg.elapsedMs,
+        surfaceIndex: msg.surfaceIndex,
+        surfaceCount: msg.surfaceCount,
+        surfaceName: cfg.surfaces.find((s) => s.id === msg.surfaceId)?.name ?? '',
+      });
+      streamedResults = msg.resultsBySurface as SurfaceResults;
     } else if (msg.type === 'done') {
-      applyResults(msg.layouts as Layout[]);
+      applyResults(msg.resultsBySurface as SurfaceResults);
       optimizing.set(false);
       disposeWorker();
     }
@@ -195,18 +238,15 @@ function runThorough(): void {
 export function cancelOptimize(): void {
   if (!worker) return;
   disposeWorker();
-  if (streamedLayouts.length) applyResults(streamedLayouts);
+  if (streamedResults) applyResults(streamedResults);
   optimizing.set(false);
 }
 
 /** Clear any computed results (e.g. after import/reset). */
 export function clearLayouts(): void {
-  layouts.set([]);
-  selectedLayout.set(0);
+  layoutsBySurface.set({});
+  selectedBySurface.set({});
 }
-
-/** Total roof area for coverage display. */
-export const roofArea = derived(config, ($c) => $c.roof.width * $c.roof.height);
 
 let idCounter = 0;
 function makeId(prefix: string): string {
@@ -239,11 +279,61 @@ export function removePanelOption(id: string): void {
   config.update((c) => ({ ...c, panelOptions: c.panelOptions.filter((p) => p.id !== id) }));
 }
 
-export function addKeepOut(rect: { x: number; y: number; w: number; h: number }): string {
+// ----- Surfaces -----
+
+/** Append a surface and make it the active one; returns its new id. */
+export function addSurface(): string {
+  const id = makeId('surface');
+  config.update((c) => ({
+    ...c,
+    surfaces: [
+      ...c.surfaces,
+      { id, name: `Surface ${c.surfaces.length + 1}`, width: 200, height: 100, keepOuts: [] },
+    ],
+  }));
+  activeSurfaceId.set(id);
+  return id;
+}
+
+export function updateSurface(
+  id: string,
+  patch: Partial<Pick<Surface, 'name' | 'width' | 'height'>>,
+): void {
+  config.update((c) => ({
+    ...c,
+    surfaces: c.surfaces.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+  }));
+}
+
+/**
+ * Remove a surface, along with any results computed for it. The last surface is never
+ * removed — the planner always has something to draw on.
+ */
+export function removeSurface(id: string): void {
+  const current = get(config);
+  if (current.surfaces.length <= 1) return;
+  config.update((c) => ({ ...c, surfaces: c.surfaces.filter((s) => s.id !== id) }));
+  const drop = <T,>(m: Record<string, T>) =>
+    Object.fromEntries(Object.entries(m).filter(([key]) => key !== id));
+  layoutsBySurface.update(drop);
+  selectedBySurface.update(drop);
+}
+
+// ----- Keep-outs -----
+// Keyed by keep-out id rather than by (surface, keep-out): ids are unique across the
+// whole config, so callers that already hold one never need to know which surface owns it.
+
+/** Add a keep-out to a surface, defaulting to the active one. */
+export function addKeepOut(
+  rect: { x: number; y: number; w: number; h: number },
+  surfaceId: string = get(activeSurfaceId),
+): string {
   const id = makeId('keepout');
   config.update((c) => ({
     ...c,
-    keepOuts: [...c.keepOuts, { id, label: 'Keep-out', ...rect }],
+    surfaces: c.surfaces.map((s) =>
+      s.id === surfaceId ? { ...s, keepOuts: [...s.keepOuts, { id, label: 'Keep-out', ...rect }] } : s,
+    ),
   }));
   return id;
 }
@@ -251,16 +341,23 @@ export function addKeepOut(rect: { x: number; y: number; w: number; h: number })
 export function updateKeepOut(id: string, patch: Partial<KeepOut>): void {
   config.update((c) => ({
     ...c,
-    keepOuts: c.keepOuts.map((k) => (k.id === id ? { ...k, ...patch } : k)),
+    surfaces: c.surfaces.map((s) =>
+      s.keepOuts.some((k) => k.id === id)
+        ? { ...s, keepOuts: s.keepOuts.map((k) => (k.id === id ? { ...k, ...patch } : k)) }
+        : s,
+    ),
   }));
 }
 
 export function removeKeepOut(id: string): void {
-  config.update((c) => ({ ...c, keepOuts: c.keepOuts.filter((k) => k.id !== id) }));
-}
-
-export function updateRoof(patch: Partial<Config['roof']>): void {
-  config.update((c) => ({ ...c, roof: { ...c.roof, ...patch } }));
+  config.update((c) => ({
+    ...c,
+    surfaces: c.surfaces.map((s) =>
+      s.keepOuts.some((k) => k.id === id)
+        ? { ...s, keepOuts: s.keepOuts.filter((k) => k.id !== id) }
+        : s,
+    ),
+  }));
 }
 
 export function setConfig(next: Config): void {

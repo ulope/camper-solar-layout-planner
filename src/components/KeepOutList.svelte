@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { config, updateKeepOut, removeKeepOut, addKeepOut, selectedKeepOut } from '../lib/stores';
+  import { activeSurface, updateKeepOut, removeKeepOut, addKeepOut, selectedKeepOut } from '../lib/stores';
 
   function num(e: Event): number {
     return Math.round(Number((e.target as HTMLInputElement).value) || 0);
@@ -8,17 +8,17 @@
 
 <section class="card">
   <div class="head">
-    <h2>Keep-out areas</h2>
+    <h2>Keep-out areas <span class="scope">{$activeSurface.name}</span></h2>
     <button class="ghost" onclick={() => addKeepOut({ x: 10, y: 10, w: 40, h: 40 })}>+ Add</button
     >
   </div>
   <p class="hint">Hatches, vents, antennas. Drag on the canvas to draw one.</p>
 
-  {#if $config.keepOuts.length === 0}
-    <p class="empty">No keep-out areas.</p>
+  {#if $activeSurface.keepOuts.length === 0}
+    <p class="empty">No keep-out areas on this surface.</p>
   {/if}
 
-  {#each $config.keepOuts as ko (ko.id)}
+  {#each $activeSurface.keepOuts as ko (ko.id)}
     <div
       class="row"
       class:selected={$selectedKeepOut === ko.id}
@@ -78,6 +78,14 @@
   }
   h2 {
     font-size: 14px;
+  }
+  .scope {
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .scope::before {
+    content: '· ';
   }
   .hint {
     color: var(--text-dim);

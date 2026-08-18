@@ -1,6 +1,6 @@
 <script lang="ts">
   import Toolbar from './components/Toolbar.svelte';
-  import DimensionsForm from './components/DimensionsForm.svelte';
+  import SurfacesForm from './components/SurfacesForm.svelte';
   import PanelOptionsList from './components/PanelOptionsList.svelte';
   import KeepOutList from './components/KeepOutList.svelte';
   import LayoutCanvas from './components/LayoutCanvas.svelte';
@@ -50,7 +50,7 @@
   <Toolbar />
   <div class="body" style="--results-w: {resultsW}px">
     <aside class="sidebar">
-      <DimensionsForm />
+      <SurfacesForm />
       <PanelOptionsList />
       <KeepOutList />
     </aside>
