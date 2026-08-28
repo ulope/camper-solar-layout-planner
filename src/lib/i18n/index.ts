@@ -7,8 +7,14 @@ import { format, type MessageParams } from './messages';
 export type { MessageKey } from './en';
 export type { MessageParams } from './messages';
 
-/** A language the UI can be shown in, labelled in its own tongue. */
-export type LocaleInfo = { code: Locale; label: string; htmlLang: string };
+/**
+ * A language the UI can be shown in, labelled in its own tongue.
+ *
+ * `flag` is decoration for the picker only — it is always paired with the label, since a
+ * country flag stands for a country rather than a language, and Windows browsers render
+ * the emoji as a bare letter pair.
+ */
+export type LocaleInfo = { code: Locale; label: string; htmlLang: string; flag: string };
 
 export const CATALOGS = { en, de } satisfies Record<string, Catalog>;
 
@@ -16,9 +22,13 @@ export type Locale = keyof typeof CATALOGS;
 
 /** Offered in the language picker, in this order. */
 export const LOCALES: LocaleInfo[] = [
-  { code: 'en', label: 'English', htmlLang: 'en' },
-  { code: 'de', label: 'Deutsch', htmlLang: 'de' },
+  { code: 'en', label: 'English', htmlLang: 'en', flag: '🇬🇧' },
+  { code: 'de', label: 'Deutsch', htmlLang: 'de', flag: '🇩🇪' },
 ];
+
+/** The entry for a locale; falls back to the first one so callers never handle undefined. */
+export const localeInfo = (code: Locale): LocaleInfo =>
+  LOCALES.find((l) => l.code === code) ?? LOCALES[0];
 
 export const FALLBACK_LOCALE: Locale = DEFAULT_LOCALE as Locale;
 
@@ -77,8 +87,7 @@ locale.subscribe((code) => {
     // best-effort
   }
   if (typeof document !== 'undefined') {
-    const info = LOCALES.find((l) => l.code === code);
-    document.documentElement.lang = info?.htmlLang ?? code;
+    document.documentElement.lang = localeInfo(code).htmlLang;
     document.title = translate(code, 'app.title');
   }
 });

@@ -101,8 +101,9 @@ https://ulope.github.io/camper-solar-layout-planner/
   and current set, the box also lists the **series** and **parallel** voltage/current for
   that many identical panels.
 - **Languages** — the interface is available in **English** and **German**, switched from
-  the picker in the toolbar. The starting language follows the browser's own, and the
-  choice is remembered. Numbers, areas and prices follow the language too (`9,5 kg` and
+  the 🌐 button in the toolbar, which opens a list of flags and native names. On narrow
+  screens it collapses into the ⋯ menu alongside the file actions. The starting language
+  follows the browser's own, and the choice is remembered. Numbers, areas and prices follow the language too (`9,5 kg` and
   `89 €` in German, `9.5 kg` and `€89` in English), and the example configuration a fresh
   session starts from is created in it. Names you type — surfaces, keep-outs, panel
   models — are your data and are never rewritten by a language switch.

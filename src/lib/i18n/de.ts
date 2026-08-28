@@ -21,6 +21,7 @@ export const de: Catalog = {
   'toolbar.importError': 'Diese Datei ist keine gültige Layout-Konfiguration.',
   'toolbar.resetConfirm': 'Alles auf die Beispielkonfiguration zurücksetzen?',
   'toolbar.language': 'Sprache',
+  'toolbar.languageCurrent': 'Sprache: {name}',
 
   // ----- Surfaces -----
   'surfaces.title': 'Flächen',

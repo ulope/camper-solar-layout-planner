@@ -3,10 +3,13 @@
   import { defaultConfig, exportConfig, importConfig } from '../lib/persistence';
   import OptimizeButton from './OptimizeButton.svelte';
   import Popover from './Popover.svelte';
-  import { LOCALES, locale, setLocale, t, type Locale } from '../lib/i18n';
+  import { LOCALES, locale, localeInfo, setLocale, t, type Locale } from '../lib/i18n';
 
   let fileInput: HTMLInputElement;
   let menuOpen = $state(false);
+  let langOpen = $state(false);
+
+  const current = $derived(localeInfo($locale));
 
   function doExport() {
     const blob = new Blob([exportConfig($config)], { type: 'application/json' });
@@ -43,17 +46,36 @@
     fileInput.click();
   }
 
-  // Same three actions, rendered inline on wide screens and inside the ⋯ menu on narrow
-  // ones; the menu entries also close the menu.
+  // Same actions, rendered inline on wide screens and inside the ⋯ menu on narrow ones;
+  // the menu entries also close the menu.
   function fromMenu(action: () => void) {
     menuOpen = false;
     action();
   }
 
-  function onLanguage(e: Event) {
-    setLocale((e.currentTarget as HTMLSelectElement).value as Locale);
+  function pickLanguage(code: Locale) {
+    setLocale(code);
+    langOpen = false;
+    menuOpen = false;
   }
 </script>
+
+<!-- The language rows, shared by the standalone picker and the ⋯ menu. -->
+{#snippet languageItems()}
+  {#each LOCALES as l (l.code)}
+    <button
+      class="ghost item lang-item"
+      class:on={$locale === l.code}
+      aria-pressed={$locale === l.code}
+      lang={l.htmlLang}
+      onclick={() => pickLanguage(l.code)}
+    >
+      <span class="flag" aria-hidden="true">{l.flag}</span>
+      <span class="lname">{l.label}</span>
+      <span class="tick" aria-hidden="true">{$locale === l.code ? '✓' : ''}</span>
+    </button>
+  {/each}
+{/snippet}
 
 <header class="bar">
   <div class="title">
@@ -65,6 +87,25 @@
       <button class="ghost" onclick={pickFile}>{$t('toolbar.import')}</button>
       <button class="ghost" onclick={doExport}>{$t('toolbar.export')}</button>
       <button class="ghost" onclick={reset}>{$t('toolbar.reset')}</button>
+    </div>
+    <div class="lang-picker">
+      <Popover bind:open={langOpen} label={$t('toolbar.language')}>
+        {#snippet trigger(toggleOpen: () => void)}
+          <button
+            class="ghost globe"
+            aria-label={$t('toolbar.languageCurrent', { name: current.label })}
+            aria-expanded={langOpen}
+            title={$t('toolbar.languageCurrent', { name: current.label })}
+            onclick={toggleOpen}
+          >
+            <span class="icon" aria-hidden="true">🌐</span>
+            <span class="caret" aria-hidden="true">▾</span>
+          </button>
+        {/snippet}
+        <div class="menu">
+          {@render languageItems()}
+        </div>
+      </Popover>
     </div>
     <div class="overflow">
       <Popover bind:open={menuOpen} label={$t('toolbar.moreActions')}>
@@ -80,14 +121,13 @@
           <button class="ghost item" onclick={() => fromMenu(pickFile)}>{$t('toolbar.import')}</button>
           <button class="ghost item" onclick={() => fromMenu(doExport)}>{$t('toolbar.export')}</button>
           <button class="ghost item" onclick={() => fromMenu(reset)}>{$t('toolbar.reset')}</button>
+          <div class="section" role="group" aria-labelledby="lang-heading">
+            <p class="group" id="lang-heading">{$t('toolbar.language')}</p>
+            {@render languageItems()}
+          </div>
         </div>
       </Popover>
     </div>
-    <select class="lang" aria-label={$t('toolbar.language')} value={$locale} onchange={onLanguage}>
-      {#each LOCALES as l (l.code)}
-        <option value={l.code} lang={l.htmlLang}>{l.label}</option>
-      {/each}
-    </select>
     <OptimizeButton />
   </div>
   <input bind:this={fileInput} type="file" accept="application/json,.json" onchange={onFile} hidden />
@@ -134,12 +174,19 @@
   .overflow {
     display: none;
   }
-  /* The language picker stays visible at every width — it is how a reader who cannot
-     read the current language gets out of it. */
-  .lang {
-    width: auto;
-    padding: 5px 6px;
-    font-size: 12px;
+  /* Globe + caret, matching the Optimize split button's disclosure affordance. */
+  .globe {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 5px 8px;
+    line-height: 1;
+  }
+  .globe .icon {
+    font-size: 15px;
+  }
+  .globe .caret {
+    font-size: 10px;
     color: var(--text-dim);
   }
   .dots {
@@ -150,12 +197,51 @@
   .menu {
     display: flex;
     flex-direction: column;
-    min-width: 140px;
+    min-width: 160px;
   }
   .item {
     border: none;
     border-radius: 5px;
     text-align: left;
+  }
+  /* Language block inside the ⋯ menu, set off from the file actions above it. */
+  .section {
+    display: flex;
+    flex-direction: column;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+  .group {
+    color: var(--text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 4px;
+    padding: 0 8px;
+  }
+  .lang-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .lang-item.on {
+    background: var(--panel-bg-2);
+    color: var(--text);
+  }
+  .flag {
+    /* Windows has no country-flag glyphs and falls back to a letter pair, so reserve a
+       fixed box either way and let the label carry the meaning. */
+    flex: none;
+    width: 1.35em;
+    text-align: center;
+  }
+  .lname {
+    flex: 1;
+  }
+  .tick {
+    flex: none;
+    color: var(--accent);
   }
 
   @media (max-width: 900px) {
@@ -167,9 +253,12 @@
     }
   }
 
-  /* Collapse the file actions into the ⋯ menu before the bar can overflow. */
+  /* Collapse the file actions and the language picker into the ⋯ menu before the bar
+     can overflow. The ⋯ trigger itself is language-neutral, so the languages stay
+     reachable for a reader who cannot read the current one. */
   @media (max-width: 700px) {
-    .file-actions {
+    .file-actions,
+    .lang-picker {
       display: none;
     }
     .overflow {

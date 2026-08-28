@@ -17,6 +17,7 @@ export const en = {
   'toolbar.importError': 'That file is not a valid layout configuration.',
   'toolbar.resetConfirm': 'Reset everything to the default example configuration?',
   'toolbar.language': 'Language',
+  'toolbar.languageCurrent': 'Language: {name}',
 
   // ----- Surfaces -----
   'surfaces.title': 'Surfaces',
