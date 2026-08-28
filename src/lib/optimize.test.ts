@@ -314,3 +314,60 @@ describe('optimizeVariants', () => {
     expect(strict[0].totalPower).toBe(440);
   });
 });
+
+describe('minimum string voltage', () => {
+  // Two models that tile the test surfaces exactly: the 12 V one needs a partner to
+  // reach 24 V, the 24 V one is fine on its own.
+  const low: PanelOption = { id: 'low', name: 'low', width: 100, height: 100, power: 100, voltage: 12 };
+  const compliant: PanelOption = { id: 'hi', name: 'hi', width: 50, height: 100, power: 40, voltage: 24 };
+
+  it('places a sub-threshold model when enough of it fits to make the string', () => {
+    // 200x100 takes exactly two of the 12 V panels: 24 V in series.
+    const config = baseConfig({ panelOptions: [low], minVoltage: 24 });
+    const layout = optimize(config);
+    expect(layout.placements).toHaveLength(2);
+    expect(layout.totalPower).toBe(200);
+  });
+
+  it('refuses the same model when only one panel fits', () => {
+    const config = baseConfig({ width: 100, height: 100, panelOptions: [low] });
+    expect(optimize(config).totalPower).toBe(100); // unrestricted: a lone 12 V panel
+    expect(optimize({ ...config, minVoltage: 24 }).totalPower).toBe(0);
+  });
+
+  it('gives the space to a compliant model instead of a lone sub-threshold panel', () => {
+    // 150x100 fits one 'low' plus one 'hi' (140 Wp) or three 'hi' (120 Wp). The richer
+    // layout leaves a single 12 V panel, which a 24 V system cannot wire.
+    const config = baseConfig({ width: 150, panelOptions: [low, compliant] });
+    expect(optimize(config).totalPower).toBe(140);
+
+    const restricted = optimize({ ...config, minVoltage: 24 });
+    expect(restricted.totalPower).toBe(120);
+    expect(restricted.placements.map((p) => p.optionId)).toEqual(['hi', 'hi', 'hi']);
+  });
+
+  it('never returns a layout that violates the threshold', () => {
+    const config = baseConfig({ width: 150, panelOptions: [low, compliant], minVoltage: 24 });
+    for (const variant of optimizeVariants(config, 5)) {
+      const counts = new Map<string, number>();
+      for (const p of variant.placements) counts.set(p.optionId, (counts.get(p.optionId) ?? 0) + 1);
+      expect(counts.get('low') ?? 0).not.toBe(1);
+    }
+  });
+
+  it('leaves a model with no recorded voltage alone', () => {
+    const noVolts: PanelOption = { ...low, voltage: undefined };
+    const config = baseConfig({ width: 100, height: 100, panelOptions: [noVolts], minVoltage: 48 });
+    expect(optimize(config).totalPower).toBe(100);
+  });
+
+  it('changes nothing when every model clears the threshold', () => {
+    const config = baseConfig({ width: 150, panelOptions: [low, compliant] });
+    expect(optimizeVariants({ ...config, minVoltage: 10 })).toEqual(optimizeVariants(config));
+  });
+
+  it('carries the threshold from the config onto every surface task', () => {
+    const cfg = migrateConfig({ ...JSON.parse(JSON.stringify(layout4)), minVoltage: 48 })!;
+    expect(taskFor(cfg, cfg.surfaces[0]).minVoltage).toBe(48);
+  });
+});

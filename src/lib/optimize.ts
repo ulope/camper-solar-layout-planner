@@ -3,6 +3,7 @@ import { insetRect, expandRect, subtractAll, area, isEmpty } from './geometry';
 import { packInOrder, splitFree, prune, type ModelCandidate, type FitRule } from './packing';
 import { rankLayouts, type RankOptions } from './ranking';
 import { packablePanels, panelsAllowedOn } from './panels';
+import { minVoltageFilter, unrestrictedPanels } from './voltage';
 
 /**
  * The optimizer's view of one surface: its own geometry plus the config-wide settings
@@ -19,6 +20,7 @@ export function taskFor(config: Config, surface: Surface): SurfaceTask {
     edgeMargin: config.edgeMargin,
     panelGap: config.panelGap,
     panelOptions: panelsAllowedOn(config.panelOptions, surface.allowedPanels),
+    minVoltage: config.minVoltage,
   };
 }
 
@@ -116,7 +118,7 @@ const SORT_KEYS: SortKey[] = [
 /**
  * Generate the candidate priority orderings each packing strategy tries.
  *
- * Beyond the basic sorts, this adds two families that keep the optimizer robust as
+ * Beyond the basic sorts, this adds families that keep the optimizer robust as
  * panel options are added:
  *  - **single-model fills** — pack with only one model, so a clean uniform layout
  *    is always evaluated however many options exist.
@@ -124,13 +126,24 @@ const SORT_KEYS: SortKey[] = [
  *    lowest priority. A newly added option can then only fill leftover gaps after
  *    the proven models are placed, never steal space from them. Without this,
  *    adding an option can interleave it mid-sequence and *lower* the best result.
+ *  - **threshold-compliant only** — when a minimum string voltage is set, sorts over
+ *    just the models that clear it unaided (see below).
  */
-function buildOrderings(options: PanelOption[]): PanelOption[][] {
+function buildOrderings(options: PanelOption[], minVoltage = 0): PanelOption[][] {
   const valid = packablePanels(options);
   if (valid.length === 0) return [];
 
   const lists: PanelOption[][] = [];
   for (const key of SORT_KEYS) lists.push([...valid].sort(key));
+
+  // With a minimum string voltage set, also pack from the models that clear it on their
+  // own. A sub-threshold model is only kept when enough of it is placed (see
+  // {@link ./voltage}), and dropping those panels afterwards leaves a hole no compliant
+  // model ever got the chance to fill — these orderings never place them to begin with.
+  const unrestricted = unrestrictedPanels(valid, minVoltage);
+  if (unrestricted.length > 0 && unrestricted.length < valid.length) {
+    for (const key of SORT_KEYS) lists.push([...unrestricted].sort(key));
+  }
 
   if (valid.length > 1) {
     for (const key of SORT_KEYS) {
@@ -223,6 +236,10 @@ export function packGeometries(config: SurfaceTask): Rect[][] {
  *
  * `rank` optionally re-orders the candidates by secondary criteria within a tolerance
  * band of the best Wp (see {@link rankLayouts}); the search itself is unaffected.
+ *
+ * `config.minVoltage`, in contrast, is a hard filter applied to every packing result
+ * before it is recorded: panels of a model that does not reach the threshold in series
+ * are dropped (see {@link ./voltage}), so no returned layout can violate it.
  */
 export function optimizeVariants(config: SurfaceTask, max = 5, rank?: RankOptions): Layout[] {
   const usable = usableArea(config);
@@ -233,7 +250,8 @@ export function optimizeVariants(config: SurfaceTask, max = 5, rank?: RankOption
 
   const rules: FitRule[] = ['short', 'area', 'long'];
   const modes: OrientMode[] = ['free', 'wide', 'tall'];
-  const orderings = buildOrderings(config.panelOptions);
+  const orderings = buildOrderings(config.panelOptions, config.minVoltage);
+  const constrain = minVoltageFilter(config.panelOptions, config.minVoltage);
   const byComposition = new Map<string, Layout>();
 
   for (const free of packGeometries(config)) {
@@ -242,7 +260,7 @@ export function optimizeVariants(config: SurfaceTask, max = 5, rank?: RankOption
       for (const mode of modes) {
         const models = ordering.map((o) => toModel(o, config.panelGap, mode));
         for (const rule of rules) {
-          const placements = packInOrder(free, models, rule);
+          const placements = constrain(packInOrder(free, models, rule));
           const key = compositionKey(placements);
           if (!byComposition.has(key)) byComposition.set(key, summarize(placements, usable));
         }

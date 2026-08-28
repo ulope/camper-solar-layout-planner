@@ -106,6 +106,21 @@ describe('migrateConfig (v2)', () => {
     expect(back.panelOptions.map((p) => p.flexible)).toEqual([undefined, true]);
   });
 
+  it('defaults the minimum string voltage to off for payloads saved before it existed', () => {
+    expect(migrateConfig(v1())!.minVoltage).toBe(0);
+  });
+
+  it('round-trips a minimum string voltage', () => {
+    const c: Config = { ...defaultConfig(), minVoltage: 48 };
+    expect(migrateConfig(JSON.parse(exportConfig(c)))!.minVoltage).toBe(48);
+  });
+
+  it('normalizes a nonsensical minimum string voltage to off', () => {
+    for (const minVoltage of [-12, 'lots', null]) {
+      expect(migrateConfig({ ...v1(), minVoltage })!.minVoltage).toBe(0);
+    }
+  });
+
   it('names a surface that has none', () => {
     const c = migrateConfig({
       ...v1(),

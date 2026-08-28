@@ -43,6 +43,12 @@ export type Config = {
   panelGap: number; // minimum spacing between panels / around keep-outs, cm
   gridSnap: number; // canvas edit snap step in cm; 0 = off, else 1 | 5 | 10
   panelOptions: PanelOption[]; // catalog shared by every surface
+  /**
+   * Lowest series-string voltage a model may be wired at, in V — the system voltage the
+   * array feeds (e.g. 24 or 48). Absent or 0 means no restriction. A property of the
+   * planned installation rather than of the optimizer run, so it travels with the config.
+   */
+  minVoltage?: number;
 };
 
 /**
@@ -57,6 +63,7 @@ export type SurfaceTask = {
   panelGap: number;
   keepOuts: KeepOut[];
   panelOptions: PanelOption[];
+  minVoltage?: number; // see Config.minVoltage; absent or 0 means no restriction
 };
 
 export type Placement = {

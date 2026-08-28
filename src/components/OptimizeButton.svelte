@@ -1,6 +1,7 @@
 <script lang="ts">
   import Popover from './Popover.svelte';
   import {
+    config,
     layoutStale,
     runOptimize,
     cancelOptimize,
@@ -9,10 +10,15 @@
     optimizeProgress,
     rankOptions,
     panelDataGaps,
+    setMinVoltage,
+    voltageRestricted,
   } from '../lib/stores';
   import { ALL_CRITERIA, CRITERION_LABELS, type SecondaryCriterion } from '../lib/ranking';
 
   let optionsOpen = $state(false);
+
+  // The system voltages worth one click; anything else goes in the custom field.
+  const VOLTAGE_PRESETS = [0, 24, 48];
 
   const elapsedS = $derived(($optimizeProgress.elapsedMs / 1000).toFixed(1));
   // Which surface is being worked on, when there is more than one. Built here rather
@@ -54,6 +60,18 @@
       [list[i], list[j]] = [list[j], list[i]];
       return { ...r, criteria: list };
     });
+  }
+
+  const minVoltage = $derived($config.minVoltage ?? 0);
+  // Named so the restricted list reads as a sentence rather than a table.
+  const restrictedNote = $derived(
+    $voltageRestricted
+      .map((r) => `${r.option.name} (${r.option.voltage} V, needs ${r.needed})`)
+      .join(', '),
+  );
+
+  function setMinVoltageFrom(e: Event) {
+    setMinVoltage(Number((e.target as HTMLInputElement).value));
   }
 
   function setTolerance(e: Event) {
@@ -99,6 +117,49 @@
           title="Deeper ~5s search">🔎 Thorough</button
         >
       </div>
+
+      <p class="group">Minimum string voltage</p>
+      <div class="effort" role="group" aria-label="Minimum string voltage">
+        {#each VOLTAGE_PRESETS as v (v)}
+          <button
+            class="seg"
+            class:on={minVoltage === v}
+            onclick={() => setMinVoltage(v)}
+            title={v === 0 ? 'Place any panel model' : `For a ${v} V system`}
+            >{v === 0 ? 'Off' : `${v} V`}</button
+          >
+        {/each}
+      </div>
+      <label class="tol" for="min-voltage">
+        Custom
+        <span class="tolin">
+          <input
+            id="min-voltage"
+            type="number"
+            min="0"
+            step="1"
+            value={minVoltage}
+            oninput={setMinVoltageFrom}
+          />
+          <span class="pct">V</span>
+        </span>
+      </label>
+      {#if minVoltage > 0}
+        <p class="note">
+          A model's panels are wired as one series string, so a panel below
+          {minVoltage} V is only placed when enough of them fit on the same surface.
+        </p>
+        {#if restrictedNote}
+          <p class="note">Restricted: {restrictedNote}.</p>
+        {/if}
+        {#if $panelDataGaps.voltage > 0}
+          <p class="warn">
+            {$panelDataGaps.voltage} of {$panelDataGaps.total} model{$panelDataGaps.total === 1
+              ? ''
+              : 's'} have no voltage — not restricted.
+          </p>
+        {/if}
+      {/if}
 
       <p class="group">Secondary criteria</p>
       <ul class="criteria">

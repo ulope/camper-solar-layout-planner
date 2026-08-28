@@ -27,6 +27,9 @@ https://ulope.github.io/camper-solar-layout-planner/
   - The optimizer maximizes Wp achieved. If you also fill in **weight** and **price** per model
     you can add secondary criteria (see below) to break near-ties in favour of a lighter or
     cheaper build. The number of MPPT controllers required is still not considered.
+  - On a 24 V or 48 V system, set the **minimum string voltage** in the optimizer dropdown
+    and fill in each model's **voltage**, so low-voltage panels are only planned where
+    enough of them fit to make a usable series string.
 - The `Fast` optimizer usually gives good results on simple layout
 - The `Thorough` one usually gives noticeably better results on complex layouts with many keep-out zones.
 - If you have the option, try moving the keep out zones and see if this gives better results
@@ -64,6 +67,12 @@ https://ulope.github.io/camper-solar-layout-planner/
   - **Fast** — an instant, deterministic heuristic sweep (the default).
   - **Thorough** — a deeper ~5-second search that runs in a Web Worker with live
     progress and a Cancel button; never returns a worse result than Fast.
+- **Minimum string voltage** *(optional)* — a hard filter in the optimizer dropdown for
+  24 V or 48 V systems, with one-click **Off / 24 V / 48 V** presets and a custom field.
+  Panels of one model are wired as a series string, so a model whose Vmp is below the
+  threshold is only placed when enough of them fit on the same surface to add up to it —
+  a single 12 V panel is never planned for a 24 V system, but a pair of them is. Models
+  with no voltage recorded are never restricted, and the dropdown says how many those are.
 - **Secondary criteria** *(optional)* — rank near-equal layouts by **weight**, **price**
   and/or **number of distinct panel models used**, in a priority order you choose. Total
   Wp remains the primary objective, and the adjustable **tolerance** (default 10%) applies
@@ -115,6 +124,15 @@ best found so far.
 Both effort levels keep the best layout of each distinct *panel composition* (the per-model
 counts), so the candidate pool holds genuinely different builds rather than reshuffles of
 the same one.
+
+**Minimum string voltage** is a constraint rather than a criterion, so it acts *during*
+the search. Whether a sub-threshold model is admissible depends on how many of it a layout
+places, which is not known until the panels are down, so every packing result passes
+through a filter that drops the panels of any model short of its series count. The area
+they held becomes free space again, so the thorough search's next refill can hand it to a
+compliant model instead, and the fast sweep additionally packs orderings built only from
+the models that clear the threshold unaided. When no model in the catalog is restricted
+the filter is the identity function and both searches run exactly as before.
 
 **Secondary criteria** are applied to that pool after the search, never during it: the
 layouts within the tolerance band below the best total Wp are treated as equivalent and
