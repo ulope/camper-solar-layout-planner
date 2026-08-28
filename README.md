@@ -57,7 +57,8 @@ https://ulope.github.io/camper-solar-layout-planner/
 - **Canvas** — all surfaces stacked vertically and labeled, with the one the sidebar
   edits highlighted. Rulers on both axes (the vertical one restarts at 0 per surface, so
   every reading is in that surface's own coordinates), a mouse-position crosshair with a
-  live cm readout, and color-coded panels labeled with model name and Wp.
+  live cm readout, and color-coded panels labeled with model name and Wp (long names wrap
+  to the panel, and are truncated when even the wrapped label has no room).
 - **Panel catalog** — any number of models (name, length, width, power in Wp), listed as
   compact one-line entries; click one to edit it in a dialog. Each model is marked **rigid**
   or **flexible**, which decides the surfaces it can go on. Optional **voltage** and
