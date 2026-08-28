@@ -210,8 +210,12 @@ export const de: Catalog = {
   'canvas.unit': 'cm',
   'canvas.stale': 'Konfiguration geändert – neu optimieren',
   'canvas.hint':
-    'Auf einer Fläche ziehen legt eine Sperrfläche an · Sperrfläche ziehen verschiebt sie · an den Kanten ziehen ändert die Größe',
+    'Auf einer Fläche ziehen legt eine Sperrfläche an · Sperrfläche ziehen verschiebt sie, an den Kanten ziehen skaliert · scrollen zoomt · Hintergrund ziehen verschiebt die Ansicht',
   'canvas.readout': '{x}, {y} cm',
+  'canvas.zoomIn': 'Vergrößern',
+  'canvas.zoomOut': 'Verkleinern',
+  'canvas.zoomReset': 'Ansicht zurücksetzen',
+  'canvas.zoomLevel': '{percent}%',
   'canvas.size': '{width} × {height} cm',
   'canvas.power': '{power} Wp',
 
