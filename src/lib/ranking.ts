@@ -1,3 +1,4 @@
+import type { MessageKey } from './i18n';
 import type { Layout, PanelOption } from './types';
 
 /**
@@ -17,10 +18,21 @@ export type RankOptions = {
 export const DEFAULT_TOLERANCE = 0.1;
 export const DEFAULT_RANK: RankOptions = { criteria: [], tolerance: DEFAULT_TOLERANCE };
 
-export const CRITERION_LABELS: Record<SecondaryCriterion, string> = {
-  weight: 'Lighter',
-  price: 'Cheaper',
-  panelTypes: 'Fewer panel types',
+/**
+ * Message keys for each criterion: the picker label, and the lowercase phrase the results
+ * panel drops into "Ranked by …". Two keys rather than one lowercased at the call site —
+ * German capitalizes nouns, so "Weniger Modultypen".toLowerCase() is not a sentence form.
+ */
+export const CRITERION_LABEL_KEYS: Record<SecondaryCriterion, MessageKey> = {
+  weight: 'criterion.weight',
+  price: 'criterion.price',
+  panelTypes: 'criterion.panelTypes',
+};
+
+export const CRITERION_PHRASE_KEYS: Record<SecondaryCriterion, MessageKey> = {
+  weight: 'criterionPhrase.weight',
+  price: 'criterionPhrase.price',
+  panelTypes: 'criterionPhrase.panelTypes',
 };
 
 export const ALL_CRITERIA: SecondaryCriterion[] = ['weight', 'price', 'panelTypes'];

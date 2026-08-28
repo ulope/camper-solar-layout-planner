@@ -1,3 +1,4 @@
+import { msg } from './i18n';
 import type { AllowedPanels, Config, KeepOut, Surface } from './types';
 
 const STORAGE_KEY = 'camper-solar-layout:config:v1';
@@ -11,16 +12,22 @@ const STORAGE_KEY = 'camper-solar-layout:config:v1';
  */
 const CONFIG_VERSION = 2;
 
-/** A sensible starting configuration with one surface and one example panel model. */
+/**
+ * A sensible starting configuration with one surface and two example panel models.
+ *
+ * The example names are translated at the moment they are created and then stored like
+ * any other user-entered name, so a config keeps the wording it was made with rather
+ * than silently renaming a saved plan on a language switch.
+ */
 export function defaultConfig(): Config {
   return {
     surfaces: [
       {
         id: 'surface-roof',
-        name: 'Roof',
+        name: msg('defaults.roof'),
         width: 300,
         height: 180,
-        keepOuts: [{ id: 'hatch-1', label: 'Roof hatch', x: 120, y: 60, w: 50, h: 50 }],
+        keepOuts: [{ id: 'hatch-1', label: msg('defaults.roofHatch'), x: 120, y: 60, w: 50, h: 50 }],
         allowedPanels: 'both',
       },
     ],
@@ -29,8 +36,8 @@ export function defaultConfig(): Config {
     gridSnap: 1,
     minVoltage: 0,
     panelOptions: [
-      { id: 'panel-1', name: '100 W mono', width: 100, height: 50, power: 100, weight: 5.5, price: 89 },
-      { id: 'panel-2', name: '175 W mono', width: 148, height: 67, power: 175, weight: 9.5, price: 159 },
+      { id: 'panel-1', name: msg('defaults.panel100'), width: 100, height: 50, power: 100, weight: 5.5, price: 89 },
+      { id: 'panel-2', name: msg('defaults.panel175'), width: 148, height: 67, power: 175, weight: 9.5, price: 159 },
     ],
   };
 }
@@ -63,7 +70,10 @@ function toSurface(value: unknown, index: number): Surface | null {
   if (!Array.isArray(s.keepOuts)) return null;
   return {
     id: s.id,
-    name: typeof s.name === 'string' && s.name !== '' ? s.name : `Surface ${index + 1}`,
+    name:
+      typeof s.name === 'string' && s.name !== ''
+        ? s.name
+        : msg('defaults.surface', { index: index + 1 }),
     width: s.width,
     height: s.height,
     keepOuts: s.keepOuts as KeepOut[],
@@ -100,7 +110,7 @@ export function migrateConfig(value: unknown): Config | null {
       surfaces: [
         {
           id: 'surface-roof',
-          name: 'Roof',
+          name: msg('defaults.roof'),
           width: roof.width,
           height: roof.height,
           keepOuts: c.keepOuts as KeepOut[],

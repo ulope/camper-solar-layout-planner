@@ -8,13 +8,20 @@
   } from '../lib/stores';
   import { num } from '../lib/format';
   import { isPanelEnabled, isPanelFlexible } from '../lib/panels';
+  import { t, type MessageKey } from '../lib/i18n';
   import type { AllowedPanels } from '../lib/types';
 
-  const ALLOWED: { value: AllowedPanels; label: string; title: string }[] = [
-    { value: 'rigid', label: 'Rigid', title: 'Only framed panels may be placed here' },
-    { value: 'flexible', label: 'Flexible', title: 'Only bendable panels may be placed here' },
-    { value: 'both', label: 'Both', title: 'Any panel may be placed here' },
+  const ALLOWED: { value: AllowedPanels; label: MessageKey; title: MessageKey }[] = [
+    { value: 'rigid', label: 'surfaces.allowed.rigid', title: 'surfaces.allowed.rigidTitle' },
+    {
+      value: 'flexible',
+      label: 'surfaces.allowed.flexible',
+      title: 'surfaces.allowed.flexibleTitle',
+    },
+    { value: 'both', label: 'surfaces.allowed.both', title: 'surfaces.allowed.bothTitle' },
   ];
+
+  const SNAPS = [0, 1, 5, 10];
 
   /**
    * Whether a surface's allowance rules out every model the optimizer would consider —
@@ -32,10 +39,10 @@
 
 <section class="card">
   <div class="head">
-    <h2>Surfaces</h2>
-    <button class="ghost" onclick={() => addSurface()}>+ Add</button>
+    <h2>{$t('surfaces.title')}</h2>
+    <button class="ghost" onclick={() => addSurface()}>{$t('common.add')}</button>
   </div>
-  <p class="hint">Roof, sidewalls, … All measurements in centimeters.</p>
+  <p class="hint">{$t('surfaces.hint')}</p>
 
   {#each $config.surfaces as s (s.id)}
     <div
@@ -49,15 +56,15 @@
       <input
         class="name"
         type="text"
-        aria-label="Surface name"
+        aria-label={$t('surfaces.nameLabel')}
         value={s.name}
         oninput={(e) => updateSurface(s.id, { name: (e.target as HTMLInputElement).value })}
       />
       {#if $config.surfaces.length > 1}
         <button
           class="danger ghost del"
-          title="Remove surface"
-          aria-label="Remove {s.name}"
+          title={$t('surfaces.removeTitle')}
+          aria-label={$t('surfaces.remove', { name: s.name })}
           onclick={(e) => {
             e.stopPropagation();
             removeSurface(s.id);
@@ -66,7 +73,7 @@
       {/if}
       <div class="dims">
         <label>
-          Length
+          {$t('surfaces.length')}
           <input
             type="number"
             min="0"
@@ -75,7 +82,7 @@
           />
         </label>
         <label>
-          Width (depth)
+          {$t('surfaces.width')}
           <input
             type="number"
             min="0"
@@ -85,23 +92,31 @@
         </label>
       </div>
       <div class="allow">
-        <span class="alabel">Panels</span>
-        <div class="seg-group" role="group" aria-label="Panel types allowed on {s.name}">
+        <span class="alabel">{$t('surfaces.panels')}</span>
+        <div
+          class="seg-group"
+          role="group"
+          aria-label={$t('surfaces.allowedAria', { name: s.name })}
+        >
           {#each ALLOWED as a (a.value)}
             <button
               class="seg"
               class:on={s.allowedPanels === a.value}
-              title={a.title}
+              title={$t(a.title)}
               onclick={(e) => {
                 e.stopPropagation();
                 updateSurface(s.id, { allowedPanels: a.value });
-              }}>{a.label}</button
+              }}>{$t(a.label)}</button
             >
           {/each}
         </div>
         {#if starvedBy(s.allowedPanels)}
           <p class="warn">
-            No {s.allowedPanels} models are selected — nothing can be placed here.
+            {$t(
+              s.allowedPanels === 'rigid'
+                ? 'surfaces.starved.rigid'
+                : 'surfaces.starved.flexible',
+            )}
           </p>
         {/if}
       </div>
@@ -110,11 +125,11 @@
 </section>
 
 <section class="card">
-  <h2>Spacing</h2>
-  <p class="hint">Applies to every surface.</p>
+  <h2>{$t('spacing.title')}</h2>
+  <p class="hint">{$t('spacing.hint')}</p>
   <div class="grid">
     <div>
-      <label for="margin">Edge margin</label>
+      <label for="margin">{$t('spacing.edgeMargin')}</label>
       <input
         id="margin"
         type="number"
@@ -124,7 +139,7 @@
       />
     </div>
     <div>
-      <label for="gap">Panel gap</label>
+      <label for="gap">{$t('spacing.panelGap')}</label>
       <input
         id="gap"
         type="number"
@@ -134,17 +149,18 @@
       />
     </div>
     <div>
-      <label for="snap">Grid snap</label>
+      <label for="snap">{$t('spacing.gridSnap')}</label>
       <select
         id="snap"
         value={String($config.gridSnap)}
         onchange={(e) =>
           config.update((c) => ({ ...c, gridSnap: Number((e.target as HTMLSelectElement).value) }))}
       >
-        <option value="0">Off</option>
-        <option value="1">1 cm</option>
-        <option value="5">5 cm</option>
-        <option value="10">10 cm</option>
+        {#each SNAPS as cm (cm)}
+          <option value={String(cm)}>
+            {cm === 0 ? $t('spacing.snapOff') : $t('spacing.snapCm', { cm })}
+          </option>
+        {/each}
       </select>
     </div>
   </div>
@@ -162,6 +178,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
+  }
+  /* Translations make the action wider than English does; let the heading wrap instead
+     of breaking the button across two lines. */
+  .head button {
+    flex: none;
+    white-space: nowrap;
   }
   h2 {
     font-size: 14px;

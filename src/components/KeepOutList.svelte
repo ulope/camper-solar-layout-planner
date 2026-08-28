@@ -1,5 +1,6 @@
 <script lang="ts">
   import { activeSurface, updateKeepOut, removeKeepOut, addKeepOut, selectedKeepOut } from '../lib/stores';
+  import { t } from '../lib/i18n';
 
   function num(e: Event): number {
     return Math.round(Number((e.target as HTMLInputElement).value) || 0);
@@ -8,14 +9,15 @@
 
 <section class="card">
   <div class="head">
-    <h2>Keep-out areas <span class="scope">{$activeSurface.name}</span></h2>
-    <button class="ghost" onclick={() => addKeepOut({ x: 10, y: 10, w: 40, h: 40 })}>+ Add</button
+    <h2>{$t('keepOuts.title')} <span class="scope">{$activeSurface.name}</span></h2>
+    <button class="ghost" onclick={() => addKeepOut({ x: 10, y: 10, w: 40, h: 40 })}
+      >{$t('common.add')}</button
     >
   </div>
-  <p class="hint">Hatches, vents, antennas. Drag on the canvas to draw one.</p>
+  <p class="hint">{$t('keepOuts.hint')}</p>
 
   {#if $activeSurface.keepOuts.length === 0}
-    <p class="empty">No keep-out areas on this surface.</p>
+    <p class="empty">{$t('keepOuts.empty')}</p>
   {/if}
 
   {#each $activeSurface.keepOuts as ko (ko.id)}
@@ -35,7 +37,7 @@
       />
       <button
         class="danger ghost del"
-        title="Remove"
+        title={$t('keepOuts.remove')}
         onclick={(e) => {
           e.stopPropagation();
           removeKeepOut(ko.id);
@@ -43,19 +45,19 @@
       >
       <div class="dims">
         <label>
-          X
+          {$t('keepOuts.x')}
           <input type="number" value={ko.x} oninput={(e) => updateKeepOut(ko.id, { x: num(e) })} />
         </label>
         <label>
-          Y
+          {$t('keepOuts.y')}
           <input type="number" value={ko.y} oninput={(e) => updateKeepOut(ko.id, { y: num(e) })} />
         </label>
         <label>
-          L
+          {$t('keepOuts.length')}
           <input type="number" value={ko.w} oninput={(e) => updateKeepOut(ko.id, { w: num(e) })} />
         </label>
         <label>
-          W
+          {$t('keepOuts.width')}
           <input type="number" value={ko.h} oninput={(e) => updateKeepOut(ko.id, { h: num(e) })} />
         </label>
       </div>
@@ -75,6 +77,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
+  }
+  /* Translations make the action wider than English does; let the heading wrap instead
+     of breaking the button across two lines. */
+  .head button {
+    flex: none;
+    white-space: nowrap;
   }
   h2 {
     font-size: 14px;
