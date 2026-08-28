@@ -98,7 +98,24 @@
             title={$t('toolbar.languageCurrent', { name: current.label })}
             onclick={toggleOpen}
           >
-            <span class="icon" aria-hidden="true">🌐</span>
+            <!-- Drawn rather than the 🌐 emoji, which platform fonts force to a fixed
+                 blue that clashes with any toolbar it lands on. Stroked in currentColor,
+                 so it takes the button's own text color on light or dark. -->
+            <svg
+              class="icon"
+              viewBox="0 0 16 16"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.2"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="8" cy="8" r="6.3" />
+              <ellipse cx="8" cy="8" rx="2.75" ry="6.3" />
+              <path d="M2.1 5.8h11.8M2.1 10.2h11.8" />
+            </svg>
             <span class="caret" aria-hidden="true">▾</span>
           </button>
         {/snippet}
@@ -183,7 +200,7 @@
     line-height: 1;
   }
   .globe .icon {
-    font-size: 15px;
+    display: block;
   }
   .globe .caret {
     font-size: 10px;
