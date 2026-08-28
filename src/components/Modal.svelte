@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { t } from '../lib/i18n';
 
   // Thin wrapper over the native <dialog>: showModal() gives focus trapping, Esc and an
   // inert background for free, so there is no focus-trap code to maintain here.
@@ -33,7 +34,11 @@
   <div class="sheet">
     <header>
       <h2>{title}</h2>
-      <button class="ghost close" title="Close" aria-label="Close" onclick={() => (open = false)}
+      <button
+        class="ghost close"
+        title={$t('common.close')}
+        aria-label={$t('common.close')}
+        onclick={() => (open = false)}
         >×</button
       >
     </header>

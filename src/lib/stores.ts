@@ -5,6 +5,7 @@ import { optimizeFastAll, optimizeThoroughAll } from './optimizeAll';
 import { ALL_CRITERIA, DEFAULT_RANK, type RankOptions, type SecondaryCriterion } from './ranking';
 import { isPanelEnabled } from './panels';
 import { panelVoltage, restrictedPanels } from './voltage';
+import { msg } from './i18n';
 
 /** How hard the optimizer searches. 'fast' is the instant sweep; 'thorough' runs ~5s. */
 export type OptimizerEffort = 'fast' | 'thorough';
@@ -310,7 +311,7 @@ export function addSurface(): string {
       ...c.surfaces,
       {
         id,
-        name: `Surface ${c.surfaces.length + 1}`,
+        name: msg('defaults.surface', { index: c.surfaces.length + 1 }),
         width: 200,
         height: 100,
         keepOuts: [],
@@ -359,7 +360,9 @@ export function addKeepOut(
   config.update((c) => ({
     ...c,
     surfaces: c.surfaces.map((s) =>
-      s.id === surfaceId ? { ...s, keepOuts: [...s.keepOuts, { id, label: 'Keep-out', ...rect }] } : s,
+      s.id === surfaceId
+        ? { ...s, keepOuts: [...s.keepOuts, { id, label: msg('defaults.keepOut'), ...rect }] }
+        : s,
     ),
   }));
   return id;

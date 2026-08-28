@@ -9,27 +9,38 @@
   } from '../lib/stores';
   import { panelColor } from '../lib/colors';
   import { isPanelFlexible } from '../lib/panels';
-  import { CRITERION_LABELS, layoutFieldStat, optionsById, type FieldStat } from '../lib/ranking';
-  import { fmtArea, fmtPrice, fmtNum as fmtDec } from '../lib/format';
+  import { CRITERION_PHRASE_KEYS, layoutFieldStat, optionsById, type FieldStat } from '../lib/ranking';
+  import { fmt, t, tHtml } from '../lib/i18n';
   import type { Layout } from '../lib/types';
 
   const byId = $derived(optionsById($config.panelOptions));
 
-  const FIELD_NAMES = { weight: 'weight', price: 'price' } as const;
+  // The two optional-field totals, in the order both the combined card and each option
+  // render them.
+  const TOTALS = [
+    { field: 'weight', label: 'results.weight' },
+    { field: 'price', label: 'results.price' },
+  ] as const;
 
   /** Render one weight/price figure from its stat, keeping the "≥" / "—" semantics. */
   function renderStat(stat: FieldStat, field: 'weight' | 'price') {
     const { total, missing, models } = stat;
-    const name = FIELD_NAMES[field];
     if (models === 0 || missing === models) {
-      return { text: '—', partial: false, title: `No placed model has a ${name}.` };
+      return {
+        text: '—',
+        partial: false,
+        title: $t(field === 'weight' ? 'results.noWeightData' : 'results.noPriceData'),
+      };
     }
-    const value = field === 'weight' ? `${fmtDec(total)} kg` : fmtPrice(total);
+    const value = field === 'weight' ? $fmt.weight(total) : $fmt.price(total);
     if (missing === 0) return { text: value, partial: false, title: '' };
     return {
       text: `≥ ${value}`,
       partial: true,
-      title: `${missing} of ${models} placed models have no ${name} — the total is a lower bound.`,
+      title: $t(field === 'weight' ? 'results.partialWeight' : 'results.partialPrice', {
+        missing,
+        count: models,
+      }),
     };
   }
 
@@ -93,7 +104,10 @@
     const absolute = maxPower - l.totalPower;
     return {
       pct: (absolute / maxPower) * 100,
-      title: `${Math.round(absolute)} Wp less than the highest-Wp option (${maxPower} Wp).`,
+      title: $t('results.offsetTitle', {
+        delta: $fmt.num(Math.round(absolute), 0),
+        max: $fmt.num(maxPower, 0),
+      }),
     };
   }
 
@@ -142,13 +156,16 @@
       .sort((a, b) => b.wp - a.wp);
   }
 
-  const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
-
   // With secondary criteria the top option is not necessarily the highest-Wp one, so
   // spell out why it leads.
   const criteriaNote = $derived(
     $rankOptions.criteria.length > 0
-      ? `Ranked by ${$rankOptions.criteria.map((c) => CRITERION_LABELS[c].toLowerCase()).join(', then ')} among layouts within ${Math.round($rankOptions.tolerance * 100)}% of the best Wp.`
+      ? $t('results.criteriaNote', {
+          criteria: $rankOptions.criteria
+            .map((c) => $t(CRITERION_PHRASE_KEYS[c]))
+            .join($t('results.criteriaJoin')),
+          pct: $fmt.num(Math.round($rankOptions.tolerance * 100), 0),
+        })
       : '',
   );
 
@@ -164,39 +181,41 @@
 
 <section class="card">
   <div class="head">
-    <h2>Results</h2>
+    <h2>{$t('results.title')}</h2>
   </div>
 
   {#if !hasResults}
-    <p class="empty">Click <strong>Optimize</strong> to compute layouts.</p>
+    <!-- Carries its own <strong>; the message text is app-owned and takes no parameters. -->
+    <p class="empty">{@html $tHtml('results.emptyPrompt')}</p>
   {:else if noFit}
-    <p class="empty">
-      No panels fit in the available area. Try smaller panels or a larger surface.
-    </p>
+    <p class="empty">{$t('results.noFit')}</p>
   {:else}
-    <p class="hint">Select an option to preview it on the canvas.</p>
+    <p class="hint">{$t('results.selectHint')}</p>
     {#if criteriaNote}
       <p class="criteria-note">{criteriaNote}</p>
     {/if}
     {#if anyPartial}
-      <p class="partial-note">Totals marked ≥ exclude models with no weight or price.</p>
+      <p class="partial-note">{$t('results.partialNote')}</p>
     {/if}
 
     {#if multi}
       <div class="combined">
         <div class="orow">
-          <span class="otitle">All surfaces</span>
-          <span class="power">{combined.totalPower} <span class="wp">Wp</span></span>
+          <span class="otitle">{$t('results.allSurfaces')}</span>
+          <span class="power">{$fmt.num(combined.totalPower, 0)} <span class="wp">Wp</span></span>
         </div>
         <div class="meta">
-          {combined.panelCount} panel{combined.panelCount === 1 ? '' : 's'} across
-          {$config.surfaces.length} surfaces · {fmtArea(combined.usedArea)}
+          {$t('results.combinedMeta', {
+            panels: $t('results.panelCount', { count: combined.panelCount }),
+            surfaces: $t('results.surfaceCount', { count: $config.surfaces.length }),
+            area: $fmt.area(combined.usedArea),
+          })}
         </div>
         <div class="totals">
-          {#each [{ field: 'weight', label: 'Weight' }, { field: 'price', label: 'Price' }] as const as s (s.field)}
+          {#each TOTALS as s (s.field)}
             {@const stat = combinedStat(s.field)}
             <span class="tot">
-              <span class="tlabel">{s.label}</span>
+              <span class="tlabel">{$t(s.label)}</span>
               <span class="tvalue" class:partial={stat.partial} title={stat.title}>{stat.text}</span>
             </span>
           {/each}
@@ -210,17 +229,17 @@
         <div class="shead">
           <h3>{surface.name}</h3>
           {#if options.length > 0}
-            <span class="count">{options.length} option{options.length > 1 ? 's' : ''}</span>
+            <span class="count">{$t('results.optionCount', { count: options.length })}</span>
           {/if}
         </div>
       {:else if options.length > 0}
-        <p class="count solo">{options.length} option{options.length > 1 ? 's' : ''}</p>
+        <p class="count solo">{$t('results.optionCount', { count: options.length })}</p>
       {/if}
 
       {#if options.length === 0}
-        <p class="empty">Not optimized yet.</p>
+        <p class="empty">{$t('results.notOptimized')}</p>
       {:else if options.every((l) => l.placements.length === 0)}
-        <p class="empty">No panels fit on this surface.</p>
+        <p class="empty">{$t('results.noFitSurface')}</p>
       {:else}
         {#each options as l, i (i)}
           <button
@@ -230,30 +249,35 @@
           >
             <div class="orow">
               <span class="otitle">
-                Option {i + 1}
-                {#if i === 0}<span class="badge">Best</span>{/if}
+                {$t('results.option', { index: i + 1 })}
+                {#if i === 0}<span class="badge">{$t('results.best')}</span>{/if}
               </span>
-              <span class="power">{l.totalPower} <span class="wp">Wp</span></span>
+              <span class="power">{$fmt.num(l.totalPower, 0)} <span class="wp">Wp</span></span>
             </div>
             <div class="meta">
-              {l.panelCount} panel{l.panelCount === 1 ? '' : 's'} · {Math.round(l.coverage * 100)}%
-              coverage · {fmtArea(l.usedArea)}
+              {$t('results.meta', {
+                panels: $t('results.panelCount', { count: l.panelCount }),
+                coverage: $fmt.num(Math.round(l.coverage * 100), 0),
+                area: $fmt.area(l.usedArea),
+              })}
               {#if showOffset(options)}
                 {@const off = offsetFor(l, options)}
                 {#if off}
-                  <span class="offset" title={off.title}>· −{off.pct.toFixed(1)}% vs max Wp</span>
+                  <span class="offset" title={off.title}
+                    >{$t('results.offset', { pct: $fmt.fixed(off.pct) })}</span
+                  >
                 {:else}
-                  <span class="maxtag" title="Highest total Wp of the computed options."
-                    >· max Wp</span
+                  <span class="maxtag" title={$t('results.maxTagTitle')}
+                    >{$t('results.maxTag')}</span
                   >
                 {/if}
               {/if}
             </div>
             <div class="totals">
-              {#each [{ field: 'weight', label: 'Weight' }, { field: 'price', label: 'Price' }] as const as s (s.field)}
+              {#each TOTALS as s (s.field)}
                 {@const stat = statFor(l, s.field)}
                 <span class="tot">
-                  <span class="tlabel">{s.label}</span>
+                  <span class="tlabel">{$t(s.label)}</span>
                   <span class="tvalue" class:partial={stat.partial} title={stat.title}
                     >{stat.text}</span
                   >
@@ -264,21 +288,35 @@
               {#each breakdownFor(l) as b (b.id)}
                 <span class="chip">
                   <span class="swatch" style="background: {b.color}"></span>
-                  {b.name} × {b.count}
-                  {#if b.flexible}<span class="flex" title="Flexible panel">flex</span>{/if}
+                  {$t('results.chip', { name: b.name, count: b.count })}
+                  {#if b.flexible}<span class="flex" title={$t('results.flexTitle')}
+                      >{$t('results.flexTag')}</span
+                    >{/if}
                 </span>
               {/each}
             </div>
             {#if wiringFor(l).length > 0}
               <div class="wiring">
                 <div class="whead">
-                  <span></span><span>Series</span><span>Parallel</span>
+                  <span></span><span>{$t('results.series')}</span><span
+                    >{$t('results.parallel')}</span
+                  >
                 </div>
                 {#each wiringFor(l) as w (w.id)}
                   <div class="wrow">
-                    <span class="wname">{w.name} ×{w.count}</span>
-                    <span>{fmtNum(w.seriesV)} V · {fmtNum(w.seriesA)} A</span>
-                    <span>{fmtNum(w.parallelV)} V · {fmtNum(w.parallelA)} A</span>
+                    <span class="wname">{$t('results.wiringCount', { name: w.name, count: w.count })}</span>
+                    <span
+                      >{$t('results.wiringValues', {
+                        volts: $fmt.num(w.seriesV),
+                        amps: $fmt.num(w.seriesA),
+                      })}</span
+                    >
+                    <span
+                      >{$t('results.wiringValues', {
+                        volts: $fmt.num(w.parallelV),
+                        amps: $fmt.num(w.parallelA),
+                      })}</span
+                    >
                   </div>
                 {/each}
               </div>

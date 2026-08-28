@@ -100,6 +100,12 @@ https://ulope.github.io/camper-solar-layout-planner/
   model has voltage
   and current set, the box also lists the **series** and **parallel** voltage/current for
   that many identical panels.
+- **Languages** — the interface is available in **English** and **German**, switched from
+  the picker in the toolbar. The starting language follows the browser's own, and the
+  choice is remembered. Numbers, areas and prices follow the language too (`9,5 kg` and
+  `89 €` in German, `9.5 kg` and `€89` in English), and the example configuration a fresh
+  session starts from is created in it. Names you type — surfaces, keep-outs, panel
+  models — are your data and are never rewritten by a language switch.
 - **Autosave** — the full configuration is saved to the Browser's `localStorage` and restored on reload.
 - **Import / Export** — share or back up a configuration as JSON. Files exported by
   earlier single-roof versions still import: the roof becomes the first surface, keeping
@@ -196,10 +202,28 @@ npm run build      # static production build -> dist/
 The build is fully static — `dist/` can be hosted on any static file server.
 
 
+## Adding a language
+
+Translations live in `src/lib/i18n/` with no runtime dependency: `en.ts` is the source
+catalog, and every other locale is typed against its keys, so a missing or stale message
+is a compile error rather than an English string leaking into the UI.
+
+1. Copy `de.ts` to `<code>.ts`, keep the `Catalog` type annotation, and translate the values.
+   A message is a plain string, or a `{ one, other }` pair where a count decides;
+   `{name}` placeholders are filled at render time.
+2. Register it in `src/lib/i18n/index.ts` — add it to `CATALOGS` and to `LOCALES` (the
+   picker shows each language in its own words).
+3. `npm run test` checks the catalogs against each other: same keys, same placeholders,
+   same plural forms, nothing empty.
+
+Components read the `t` store (`{$t('results.title')}`) and the locale-bound number and
+currency formatters (`{$fmt.area(cm2)}`); plain modules use the non-reactive `msg()`.
+
+
 ## Tech
 
 Svelte 5 + Vite + TypeScript. Canvas rendering. Web Worker for the thorough optimizer.
-No backend.
+`Intl` for locale-aware numbers. No backend, no i18n library.
 
 
 ## AI Disclaimer

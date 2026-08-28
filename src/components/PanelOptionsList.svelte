@@ -2,7 +2,7 @@
   import { config, removePanelOption, setPanelEnabled } from '../lib/stores';
   import { panelColor } from '../lib/colors';
   import { isPanelEnabled, isPanelFlexible } from '../lib/panels';
-  import { fmtNum, fmtPrice } from '../lib/format';
+  import { fmt, t } from '../lib/i18n';
   import type { PanelOption } from '../lib/types';
   import PanelOptionModal from './PanelOptionModal.svelte';
 
@@ -20,28 +20,26 @@
   }
 
   function remove(opt: PanelOption) {
-    if (confirm(`Remove the panel model “${opt.name}”?`)) removePanelOption(opt.id);
+    if (confirm($t('panels.removeConfirm', { name: opt.name }))) removePanelOption(opt.id);
   }
 
-  // Displayed alphabetically, but each row keeps its option's index in the stored
-  // list so the swatch matches the canvas and the results breakdown. Numeric-aware
-  // so "Model 2" sorts before "Model 10".
-  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  // Displayed alphabetically in the UI language, but each row keeps its option's index
+  // in the stored list so the swatch matches the canvas and the results breakdown.
   const sorted = $derived(
     $config.panelOptions
       .map((opt, i) => ({ opt, i }))
-      .sort((a, b) => collator.compare(a.opt.name, b.opt.name)),
+      .sort((a, b) => $fmt.collator.compare(a.opt.name, b.opt.name)),
   );
 
   // Condensed one-line spec; optional fields are simply left out when unset.
   function specOf(o: PanelOption): string {
     return [
-      `${fmtNum(o.width)}×${fmtNum(o.height)} cm`,
-      `${fmtNum(o.power)} Wp`,
-      o.weight ? `${fmtNum(o.weight)} kg` : null,
-      o.price ? fmtPrice(o.price) : null,
+      $t('panels.size', { width: $fmt.num(o.width), height: $fmt.num(o.height) }),
+      $t('canvas.power', { power: $fmt.num(o.power) }),
+      o.weight ? $fmt.weight(o.weight) : null,
+      o.price ? $fmt.price(o.price) : null,
       // Rigid is the default, so only the exception is worth a word.
-      isPanelFlexible(o) ? 'flexible' : null,
+      isPanelFlexible(o) ? $t('panels.flexible') : null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -54,18 +52,15 @@
 
 <section class="card">
   <div class="head">
-    <h2>Panel options</h2>
-    <button class="ghost" onclick={openAdd}>+ Add</button>
+    <h2>{$t('panels.title')}</h2>
+    <button class="ghost" onclick={openAdd}>{$t('common.add')}</button>
   </div>
-  <p class="hint">
-    Candidate models the optimizer can choose from. Untick one to leave it out; click one to
-    edit it.
-  </p>
+  <p class="hint">{$t('panels.hint')}</p>
 
   {#if $config.panelOptions.length === 0}
-    <p class="empty">No panel models yet. Add at least one.</p>
+    <p class="empty">{$t('panels.empty')}</p>
   {:else if noneSelected}
-    <p class="empty">All models are deselected — tick at least one to optimize.</p>
+    <p class="empty">{$t('panels.noneSelected')}</p>
   {/if}
 
   {#each sorted as { opt, i } (opt.id)}
@@ -74,11 +69,11 @@
         type="checkbox"
         class="pick"
         checked={isPanelEnabled(opt)}
-        title="Use {opt.name} when optimizing"
-        aria-label="Use {opt.name} when optimizing"
+        title={$t('panels.use', { name: opt.name })}
+        aria-label={$t('panels.use', { name: opt.name })}
         onchange={(e) => setPanelEnabled(opt.id, e.currentTarget.checked)}
       />
-      <button class="main" onclick={() => openEdit(opt)} title="Edit {opt.name}">
+      <button class="main" onclick={() => openEdit(opt)} title={$t('panels.edit', { name: opt.name })}>
         <span class="swatch" style="background: {panelColor(i)}"></span>
         <span class="text">
           <span class="name">{opt.name}</span>
@@ -87,8 +82,8 @@
       </button>
       <button
         class="danger ghost del"
-        title="Remove {opt.name}"
-        aria-label="Remove {opt.name}"
+        title={$t('panels.remove', { name: opt.name })}
+        aria-label={$t('panels.remove', { name: opt.name })}
         onclick={() => remove(opt)}>×</button
       >
     </div>
@@ -109,6 +104,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
+  }
+  /* Translations make the action wider than English does; let the heading wrap instead
+     of breaking the button across two lines. */
+  .head button {
+    flex: none;
+    white-space: nowrap;
   }
   h2 {
     font-size: 14px;

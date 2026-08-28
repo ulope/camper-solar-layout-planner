@@ -13,17 +13,26 @@
     setMinVoltage,
     voltageRestricted,
   } from '../lib/stores';
-  import { ALL_CRITERIA, CRITERION_LABELS, type SecondaryCriterion } from '../lib/ranking';
+  import {
+    ALL_CRITERIA,
+    CRITERION_LABEL_KEYS,
+    type SecondaryCriterion,
+  } from '../lib/ranking';
   import { SYSTEM_VOLTAGE_PRESETS, presetFor } from '../lib/voltage';
+  import { fmt, t, tHtml } from '../lib/i18n';
 
   let optionsOpen = $state(false);
 
-  const elapsedS = $derived(($optimizeProgress.elapsedMs / 1000).toFixed(1));
+  const elapsedS = $derived($fmt.fixed($optimizeProgress.elapsedMs / 1000));
   // Which surface is being worked on, when there is more than one. Built here rather
   // than inline so the leading space survives the template's whitespace trimming.
   const scope = $derived(
     $optimizeProgress.surfaceCount > 1
-      ? ` ${$optimizeProgress.surfaceName} (${$optimizeProgress.surfaceIndex + 1}/${$optimizeProgress.surfaceCount})`
+      ? $t('optimizer.progressScope', {
+          name: $optimizeProgress.surfaceName,
+          index: $optimizeProgress.surfaceIndex + 1,
+          count: $optimizeProgress.surfaceCount,
+        })
       : '',
   );
   const selected = $derived($rankOptions.criteria);
@@ -77,61 +86,67 @@
 
 {#if $optimizing}
   <span class="progress" aria-live="polite">
-    Optimizing{scope}… {elapsedS}s · {$optimizeProgress.bestPower} Wp
+    {$t('optimizer.progress', {
+      scope,
+      seconds: elapsedS,
+      power: $fmt.num($optimizeProgress.bestPower, 0),
+    })}
   </span>
-  <button class="danger" onclick={cancelOptimize}>Cancel</button>
+  <button class="danger" onclick={cancelOptimize}>{$t('optimizer.cancel')}</button>
 {:else}
-  <Popover bind:open={optionsOpen} label="Optimizer options">
+  <Popover bind:open={optionsOpen} label={$t('optimizer.options')}>
     {#snippet trigger(toggleOpen: () => void)}
       <div class="split" class:pulse={$layoutStale}>
-        <button class="primary go" onclick={runOptimize}>⚡ Optimize</button>
+        <button class="primary go" onclick={runOptimize}>{$t('optimizer.optimize')}</button>
         <button
           class="primary caret"
-          aria-label="Optimizer options"
+          aria-label={$t('optimizer.options')}
           aria-expanded={optionsOpen}
-          title="Optimizer options"
+          title={$t('optimizer.options')}
           onclick={toggleOpen}>▾</button
         >
       </div>
     {/snippet}
 
     <div class="opts">
-      <p class="group">Effort</p>
-      <div class="effort" role="group" aria-label="Optimizer effort">
+      <p class="group">{$t('optimizer.effort')}</p>
+      <div class="effort" role="group" aria-label={$t('optimizer.effortAria')}>
         <button
           class="seg"
           class:on={$optimizerEffort === 'fast'}
           onclick={() => optimizerEffort.set('fast')}
-          title="Instant heuristic">⚡ Fast</button
+          title={$t('optimizer.fastTitle')}>{$t('optimizer.fast')}</button
         >
         <button
           class="seg"
           class:on={$optimizerEffort === 'thorough'}
           onclick={() => optimizerEffort.set('thorough')}
-          title="Deeper ~5s search">🔎 Thorough</button
+          title={$t('optimizer.thoroughTitle')}>{$t('optimizer.thorough')}</button
         >
       </div>
 
-      <p class="group">Minimum string voltage</p>
-      <div class="effort" role="group" aria-label="Minimum string voltage">
+      <p class="group">{$t('optimizer.minVoltage')}</p>
+      <div class="effort" role="group" aria-label={$t('optimizer.minVoltage')}>
         <button
           class="seg"
           class:on={minVoltage === 0}
           onclick={() => setMinVoltage(0)}
-          title="Place any panel model">Off</button
+          title={$t('optimizer.voltageOffTitle')}>{$t('optimizer.voltageOff')}</button
         >
         {#each SYSTEM_VOLTAGE_PRESETS as p (p.system)}
           <button
             class="seg"
             class:on={minVoltage === p.minVoltage}
             onclick={() => setMinVoltage(p.minVoltage)}
-            title="{p.system} V system — strings must reach {p.minVoltage} V"
-            >{p.system} V</button
+            title={$t('optimizer.voltagePresetTitle', {
+              system: $fmt.num(p.system),
+              min: $fmt.num(p.minVoltage),
+            })}>{$t('optimizer.voltagePreset', { system: $fmt.num(p.system) })}</button
           >
         {/each}
       </div>
       <label class="tol" for="min-voltage">
-        Threshold
+        {$t('optimizer.threshold')}
         <span class="tolin">
           <input
             id="min-voltage"
@@ -146,22 +161,29 @@
       </label>
       {#if minVoltage > 0}
         <details class="more">
-          <summary>Details…</summary>
+          <summary>{$t('optimizer.details')}</summary>
           <p class="note">
             {#if preset}
-              A {preset.system} V bank charges to about {preset.chargeEnd} V, so a string is
-              planned against {preset.minVoltage} V — 95% of that, plus 1 V.
+              {$t('optimizer.voltagePresetNote', {
+                system: $fmt.num(preset.system),
+                chargeEnd: $fmt.num(preset.chargeEnd),
+                min: $fmt.num(preset.minVoltage),
+              })}
             {/if}
-            A model's panels are wired as one series string, so a panel below
-            {minVoltage} V is only placed when enough of them fit on the same surface.
+            {$t('optimizer.voltageNote', { min: $fmt.num(minVoltage) })}
           </p>
           {#if $voltageRestricted.length > 0}
-            <p class="rhead">Only usable in strings of:</p>
+            <p class="rhead">{$t('optimizer.restrictedHead')}</p>
             <ul class="restricted">
               {#each $voltageRestricted as r (r.option.id)}
                 <li>
                   <span class="rname" title={r.option.name}>{r.option.name}</span>
-                  <span class="rneed">{r.needed} × {r.option.voltage} V</span>
+                  <span class="rneed"
+                    >{$t('optimizer.restrictedNeed', {
+                      count: r.needed,
+                      voltage: $fmt.num(r.option.voltage ?? 0),
+                    })}</span
+                  >
                 </li>
               {/each}
             </ul>
@@ -169,14 +191,15 @@
         </details>
         {#if $panelDataGaps.voltage > 0}
           <p class="warn">
-            {$panelDataGaps.voltage} of {$panelDataGaps.total} model{$panelDataGaps.total === 1
-              ? ''
-              : 's'} have no voltage — not restricted.
+            {$t('optimizer.voltageGap', {
+              missing: $panelDataGaps.voltage,
+              count: $panelDataGaps.total,
+            })}
           </p>
         {/if}
       {/if}
 
-      <p class="group">Secondary criteria</p>
+      <p class="group">{$t('optimizer.criteria')}</p>
       <ul class="criteria">
         {#each ordered as c (c)}
           {@const rank = selected.indexOf(c)}
@@ -184,21 +207,21 @@
             <label class="crit">
               <input type="checkbox" checked={rank >= 0} onchange={() => toggle(c)} />
               {#if rank >= 0}<span class="ord">{rank + 1}.</span>{/if}
-              <span class="cname">{CRITERION_LABELS[c]}</span>
+              <span class="cname">{$t(CRITERION_LABEL_KEYS[c])}</span>
             </label>
             {#if rank >= 0}
               <span class="move">
                 <button
                   class="ghost arrow"
-                  title="Higher priority"
-                  aria-label="Raise priority of {CRITERION_LABELS[c]}"
+                  title={$t('optimizer.raise')}
+                  aria-label={$t('optimizer.raiseAria', { name: $t(CRITERION_LABEL_KEYS[c]) })}
                   disabled={rank === 0}
                   onclick={() => move(c, -1)}>↑</button
                 >
                 <button
                   class="ghost arrow"
-                  title="Lower priority"
-                  aria-label="Lower priority of {CRITERION_LABELS[c]}"
+                  title={$t('optimizer.lower')}
+                  aria-label={$t('optimizer.lowerAria', { name: $t(CRITERION_LABEL_KEYS[c]) })}
                   disabled={rank === selected.length - 1}
                   onclick={() => move(c, 1)}>↓</button
                 >
@@ -209,7 +232,7 @@
       </ul>
 
       <label class="tol" for="tolerance">
-        Tolerance
+        {$t('optimizer.tolerance')}
         <span class="tolin">
           <input
             id="tolerance"
@@ -223,16 +246,15 @@
           <span class="pct">%</span>
         </span>
       </label>
-      <p class="note">
-        Total Wp still wins. The tolerance applies at every level: layouts within
-        {tolerancePct}% of the best Wp are ranked by the first criterion, and those within
-        {tolerancePct}% of <em>its</em> best value are decided by the next.
-      </p>
+      <!-- Carries its own <em>; the message text is app-owned and the parameter is a number. -->
+      <p class="note">{@html $tHtml('optimizer.toleranceNote', { pct: tolerancePct })}</p>
 
       {#each warnings as w (w.c)}
         <p class="warn">
-          {w.missing} of {$panelDataGaps.total} model{$panelDataGaps.total === 1 ? '' : 's'} have no
-          {w.c === 'weight' ? 'weight' : 'price'} — counted as 0.
+          {$t(w.c === 'weight' ? 'optimizer.weightGap' : 'optimizer.priceGap', {
+            missing: w.missing,
+            count: $panelDataGaps.total,
+          })}
         </p>
       {/each}
     </div>
@@ -423,7 +445,8 @@
     flex: none;
     font-variant-numeric: tabular-nums;
   }
-  .note em {
+  /* The note is rendered with {@html}, so its <em> is outside Svelte's style scoping. */
+  .note :global(em) {
     font-style: normal;
     color: var(--text);
   }

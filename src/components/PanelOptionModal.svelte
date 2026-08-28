@@ -1,8 +1,9 @@
 <script lang="ts">
   import Modal from './Modal.svelte';
   import { addPanelOption, updatePanelOption, removePanelOption } from '../lib/stores';
-  import { CURRENCY, fmtNum, toNum, toOptNum } from '../lib/format';
+  import { toNum, toOptNum } from '../lib/format';
   import { isPanelFlexible } from '../lib/panels';
+  import { fmt, t } from '../lib/i18n';
   import type { PanelOption } from '../lib/types';
 
   // `option === null` means "add a new model". Edits happen on a local draft and are only
@@ -21,7 +22,7 @@
   function toDraft(o: PanelOption | null): Draft {
     if (!o) {
       return {
-        name: 'New panel',
+        name: $t('panelModal.defaultName'),
         width: 100,
         height: 50,
         power: 100,
@@ -62,10 +63,14 @@
 
   const stats = $derived(
     [
-      areaM2 > 0 ? `${areaM2.toFixed(2)} m²` : null,
-      areaM2 > 0 && power > 0 ? `${Math.round(power / areaM2)} Wp/m²` : null,
-      weight ? `${fmtNum(weight)} kg` : null,
-      price && power > 0 ? `${CURRENCY}${(price / power).toFixed(2)}/Wp` : null,
+      areaM2 > 0 ? $fmt.area(width * height) : null,
+      areaM2 > 0 && power > 0
+        ? $t('panelModal.densityStat', { value: $fmt.num(Math.round(power / areaM2)) })
+        : null,
+      weight ? $fmt.weight(weight) : null,
+      price && power > 0
+        ? $t('panelModal.priceStat', { value: $fmt.priceExact(price / power) })
+        : null,
     ]
       .filter(Boolean)
       .join(' · '),
@@ -91,7 +96,7 @@
 
   function del() {
     if (!option) return;
-    if (confirm(`Remove the panel model “${option.name}”?`)) {
+    if (confirm($t('panels.removeConfirm', { name: option.name }))) {
       removePanelOption(option.id);
       open = false;
     }
@@ -106,74 +111,71 @@
   }
 </script>
 
-<Modal bind:open title={option ? 'Edit panel model' : 'Add panel model'}>
+<Modal bind:open title={$t(option ? 'panelModal.editTitle' : 'panelModal.addTitle')}>
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div class="fields" onkeydown={onKeyDown} role="form">
     <div class="full">
-      <label for="pm-name">Name</label>
+      <label for="pm-name">{$t('panelModal.name')}</label>
       <input id="pm-name" type="text" bind:value={draft.name} />
     </div>
 
-    <p class="group">Size (cm)</p>
+    <p class="group">{$t('panelModal.sizeGroup')}</p>
     <div class="grid two">
       <div>
-        <label for="pm-w">Length</label>
+        <label for="pm-w">{$t('panelModal.length')}</label>
         <input id="pm-w" type="number" min="0" bind:value={draft.width} />
       </div>
       <div>
-        <label for="pm-h">Width (depth)</label>
+        <label for="pm-h">{$t('panelModal.width')}</label>
         <input id="pm-h" type="number" min="0" bind:value={draft.height} />
       </div>
     </div>
 
-    <p class="group">Electrical</p>
+    <p class="group">{$t('panelModal.electricalGroup')}</p>
     <div class="grid three">
       <div>
-        <label for="pm-p">Power (Wp)</label>
+        <label for="pm-p">{$t('panelModal.power')}</label>
         <input id="pm-p" type="number" min="0" bind:value={draft.power} />
       </div>
       <div>
-        <label for="pm-v">Voltage (V)</label>
+        <label for="pm-v">{$t('panelModal.voltage')}</label>
         <input id="pm-v" type="number" min="0" placeholder="—" bind:value={draft.voltage} />
       </div>
       <div>
-        <label for="pm-a">Current (A)</label>
+        <label for="pm-a">{$t('panelModal.current')}</label>
         <input id="pm-a" type="number" min="0" placeholder="—" bind:value={draft.current} />
       </div>
     </div>
 
-    <p class="group">Weight &amp; price</p>
+    <p class="group">{$t('panelModal.weightPriceGroup')}</p>
     <div class="grid two">
       <div>
-        <label for="pm-kg">Weight (kg)</label>
+        <label for="pm-kg">{$t('panelModal.weight')}</label>
         <input id="pm-kg" type="number" min="0" step="0.1" placeholder="—" bind:value={draft.weight} />
       </div>
       <div>
-        <label for="pm-price">Price ({CURRENCY})</label>
+        <label for="pm-price">{$t('panelModal.price', { currency: $fmt.currency })}</label>
         <input id="pm-price" type="number" min="0" step="0.01" placeholder="—" bind:value={draft.price} />
       </div>
     </div>
 
-    <p class="group">Mounting</p>
-    <div class="seg-group" role="group" aria-label="Panel mounting type">
+    <p class="group">{$t('panelModal.mountingGroup')}</p>
+    <div class="seg-group" role="group" aria-label={$t('panelModal.mountingAria')}>
       <button
         class="seg"
         class:on={!draft.flexible}
         onclick={() => (draft.flexible = false)}
-        title="Framed panel; only surfaces that allow rigid panels take it">Rigid</button
+        title={$t('panelModal.rigidTitle')}>{$t('panelModal.rigid')}</button
       >
       <button
         class="seg"
         class:on={draft.flexible}
         onclick={() => (draft.flexible = true)}
-        title="Bendable panel; only surfaces that allow flexible panels take it">Flexible</button
+        title={$t('panelModal.flexibleTitle')}>{$t('panelModal.flexible')}</button
       >
     </div>
 
-    <p class="hint">
-      Voltage, current, weight and price are optional. Weight and price feed the optional
-      optimization criteria; missing values count as zero there.
-    </p>
+    <p class="hint">{$t('panelModal.hint')}</p>
     {#if stats}
       <p class="stats">{stats}</p>
     {/if}
@@ -181,11 +183,11 @@
 
   {#snippet footer()}
     {#if option}
-      <button class="danger ghost" onclick={del}>Delete</button>
+      <button class="danger ghost" onclick={del}>{$t('common.delete')}</button>
     {/if}
     <span class="spacer"></span>
-    <button class="ghost" onclick={() => (open = false)}>Cancel</button>
-    <button class="primary" disabled={!valid} onclick={save}>Save</button>
+    <button class="ghost" onclick={() => (open = false)}>{$t('common.cancel')}</button>
+    <button class="primary" disabled={!valid} onclick={save}>{$t('common.save')}</button>
   {/snippet}
 </Modal>
 

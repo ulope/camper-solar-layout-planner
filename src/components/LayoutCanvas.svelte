@@ -12,6 +12,7 @@
   import { panelColor } from '../lib/colors';
   import { snap } from '../lib/geometry';
   import { surfaceColumn, columnExtent, surfaceAtPoint, type PlacedSurface } from '../lib/surfaces';
+  import { fmt, t } from '../lib/i18n';
   import type { Rect } from '../lib/types';
 
   let canvas: HTMLCanvasElement;
@@ -230,7 +231,7 @@
     ctx.font = '9px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('cm', RULER / 2, RULER / 2);
+    ctx.fillText($t('canvas.unit'), RULER / 2, RULER / 2);
   }
 
   function drawCrosshair(ctx: CanvasRenderingContext2D, v: ReturnType<typeof view>) {
@@ -271,7 +272,10 @@
     ctx.fill();
 
     // Floating readout near the cursor, in the surface's own coordinates.
-    const label = `${Math.round(pointer.cx)}, ${Math.round(pointer.cy - placed.y0)} cm`;
+    const label = $t('canvas.readout', {
+      x: $fmt.num(Math.round(pointer.cx), 0),
+      y: $fmt.num(Math.round(pointer.cy - placed.y0), 0),
+    });
     ctx.font = '600 11px system-ui, sans-serif';
     const tw = ctx.measureText(label).width;
     let bx = x + 10;
@@ -494,14 +498,15 @@
       ctx.fillStyle = '#0d1117';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      const powerLabel = $t('canvas.power', { power: $fmt.num(p.power, 0) });
       if (name && pw > 44 && ph > 32) {
         ctx.font = '600 11px system-ui, sans-serif';
         ctx.fillText(name, cx, cy - 7);
         ctx.font = '10px system-ui, sans-serif';
-        ctx.fillText(`${p.power} Wp`, cx, cy + 7);
+        ctx.fillText(powerLabel, cx, cy + 7);
       } else if (pw > 30 && ph > 16) {
         ctx.font = '600 10px system-ui, sans-serif';
-        ctx.fillText(`${p.power} Wp`, cx, cy);
+        ctx.fillText(powerLabel, cx, cy);
       }
     }
 
@@ -538,7 +543,10 @@
           lines.push({ text: ko.label, font: '600 11px system-ui, sans-serif', color: '#ffe3df' });
         if (kh > 26 || !ko.label) {
           lines.push({
-            text: `${Math.round(ko.w)} × ${Math.round(ko.h)} cm`,
+            text: $t('canvas.size', {
+              width: $fmt.num(Math.round(ko.w), 0),
+              height: $fmt.num(Math.round(ko.h), 0),
+            }),
             font: '10px system-ui, sans-serif',
             color: '#ffb3ac',
           });
@@ -627,9 +635,21 @@
     if (guiding) drawExtents(ctx, v); // on top of the ruler gutters
   }
 
-  // Redraw whenever inputs change.
+  // Redraw whenever inputs change. `$t` is listed because the canvas draws its own
+  // labels — nothing else would re-run this effect on a language switch.
   $effect(() => {
-    void [$config, $selectedLayouts, $selectedKeepOut, $activeSurfaceId, dragRect, pointer, mode, cw, ch];
+    void [
+      $config,
+      $selectedLayouts,
+      $selectedKeepOut,
+      $activeSurfaceId,
+      $t,
+      dragRect,
+      pointer,
+      mode,
+      cw,
+      ch,
+    ];
     draw();
   });
 
@@ -796,11 +816,9 @@
     onpointerleave={onPointerLeave}
   ></canvas>
   {#if $layoutStale && anyPlacements}
-    <div class="stale-badge">Config changed — re-run optimize</div>
+    <div class="stale-badge">{$t('canvas.stale')}</div>
   {/if}
-  <div class="hint-overlay">
-    Drag a surface to add a keep-out · drag a keep-out to move · drag its edges to resize
-  </div>
+  <div class="hint-overlay">{$t('canvas.hint')}</div>
 </div>
 
 <style>

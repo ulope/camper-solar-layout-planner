@@ -3,6 +3,7 @@
   import { defaultConfig, exportConfig, importConfig } from '../lib/persistence';
   import OptimizeButton from './OptimizeButton.svelte';
   import Popover from './Popover.svelte';
+  import { LOCALES, locale, setLocale, t, type Locale } from '../lib/i18n';
 
   let fileInput: HTMLInputElement;
   let menuOpen = $state(false);
@@ -26,13 +27,13 @@
       setConfig(parsed);
       clearLayouts();
     } else {
-      alert('That file is not a valid layout configuration.');
+      alert($t('toolbar.importError'));
     }
     fileInput.value = '';
   }
 
   function reset() {
-    if (confirm('Reset everything to the default example configuration?')) {
+    if (confirm($t('toolbar.resetConfirm'))) {
       setConfig(defaultConfig());
       clearLayouts();
     }
@@ -48,36 +49,45 @@
     menuOpen = false;
     action();
   }
+
+  function onLanguage(e: Event) {
+    setLocale((e.currentTarget as HTMLSelectElement).value as Locale);
+  }
 </script>
 
 <header class="bar">
   <div class="title">
     <span class="logo" aria-hidden="true">☀</span>
-    <h1>Camper Solar Layout Planner</h1>
+    <h1>{$t('app.title')}</h1>
   </div>
   <div class="actions">
     <div class="file-actions">
-      <button class="ghost" onclick={pickFile}>Import</button>
-      <button class="ghost" onclick={doExport}>Export</button>
-      <button class="ghost" onclick={reset}>Reset</button>
+      <button class="ghost" onclick={pickFile}>{$t('toolbar.import')}</button>
+      <button class="ghost" onclick={doExport}>{$t('toolbar.export')}</button>
+      <button class="ghost" onclick={reset}>{$t('toolbar.reset')}</button>
     </div>
     <div class="overflow">
-      <Popover bind:open={menuOpen} label="More actions">
+      <Popover bind:open={menuOpen} label={$t('toolbar.moreActions')}>
         {#snippet trigger(toggleOpen: () => void)}
           <button
             class="ghost dots"
-            aria-label="More actions"
+            aria-label={$t('toolbar.moreActions')}
             aria-expanded={menuOpen}
             onclick={toggleOpen}>⋯</button
           >
         {/snippet}
         <div class="menu">
-          <button class="ghost item" onclick={() => fromMenu(pickFile)}>Import</button>
-          <button class="ghost item" onclick={() => fromMenu(doExport)}>Export</button>
-          <button class="ghost item" onclick={() => fromMenu(reset)}>Reset</button>
+          <button class="ghost item" onclick={() => fromMenu(pickFile)}>{$t('toolbar.import')}</button>
+          <button class="ghost item" onclick={() => fromMenu(doExport)}>{$t('toolbar.export')}</button>
+          <button class="ghost item" onclick={() => fromMenu(reset)}>{$t('toolbar.reset')}</button>
         </div>
       </Popover>
     </div>
+    <select class="lang" aria-label={$t('toolbar.language')} value={$locale} onchange={onLanguage}>
+      {#each LOCALES as l (l.code)}
+        <option value={l.code} lang={l.htmlLang}>{l.label}</option>
+      {/each}
+    </select>
     <OptimizeButton />
   </div>
   <input bind:this={fileInput} type="file" accept="application/json,.json" onchange={onFile} hidden />
@@ -123,6 +133,14 @@
   }
   .overflow {
     display: none;
+  }
+  /* The language picker stays visible at every width — it is how a reader who cannot
+     read the current language gets out of it. */
+  .lang {
+    width: auto;
+    padding: 5px 6px;
+    font-size: 12px;
+    color: var(--text-dim);
   }
   .dots {
     font-size: 16px;

@@ -5,6 +5,7 @@
   import KeepOutList from './components/KeepOutList.svelte';
   import LayoutCanvas from './components/LayoutCanvas.svelte';
   import ResultsSummary from './components/ResultsSummary.svelte';
+  import { t } from './lib/i18n';
 
   const RW_KEY = 'camper-solar-layout:resultsW:v1';
   const MIN_W = 220;
@@ -63,7 +64,7 @@
         class:dragging
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize results panel"
+        aria-label={$t('app.resizeResults')}
         onpointerdown={onHandleDown}
         onpointermove={onHandleMove}
         onpointerup={onHandleUp}
