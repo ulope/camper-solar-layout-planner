@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
+  SYSTEM_VOLTAGE_PRESETS,
   enforceMinVoltage,
   minVoltageFilter,
   panelVoltage,
   restrictedPanels,
+  presetFor,
   satisfiesMinVoltage,
   seriesCountFor,
   unrestrictedPanels,
@@ -160,5 +162,42 @@ describe('minVoltageFilter', () => {
 
   it('enforces the threshold when one applies', () => {
     expect(minVoltageFilter(catalog, 24)(placements('low', 1))).toEqual([]);
+  });
+});
+
+describe('SYSTEM_VOLTAGE_PRESETS', () => {
+  it('plans against the voltage the bank really charges to, not its nominal name', () => {
+    expect(SYSTEM_VOLTAGE_PRESETS).toEqual([
+      { system: 24, chargeEnd: 29.2, minVoltage: 28.7 },
+      { system: 48, chargeEnd: 58.4, minVoltage: 56.5 },
+    ]);
+  });
+
+  it('sets each threshold at 95% of the charge-end voltage plus 1 V', () => {
+    for (const p of SYSTEM_VOLTAGE_PRESETS) {
+      expect(p.minVoltage).toBeCloseTo(0.95 * p.chargeEnd + 1, 1);
+      // Below the charge-end voltage: a string that drops out over the last few percent
+      // of a charge is acceptable, so the threshold must not demand the full figure.
+      expect(p.minVoltage).toBeLessThan(p.chargeEnd);
+      expect(p.minVoltage).toBeGreaterThan(p.system);
+    }
+  });
+
+  it('excludes a lone 12 V panel from either system, and a 60-cell module from 48 V', () => {
+    const nominal12 = panel('12v', { voltage: 12 });
+    const module60 = panel('60-cell', { voltage: 31 }); // typical Vmp of a 60-cell module
+    const [v24, v48] = SYSTEM_VOLTAGE_PRESETS;
+
+    expect(seriesCountFor(nominal12, v24.minVoltage)).toBe(3);
+    expect(seriesCountFor(nominal12, v48.minVoltage)).toBe(5);
+    expect(seriesCountFor(module60, v24.minVoltage)).toBe(1);
+    expect(seriesCountFor(module60, v48.minVoltage)).toBe(2);
+  });
+
+  it('names the preset a threshold came from, and nothing for a custom one', () => {
+    expect(presetFor(28.7)?.system).toBe(24);
+    expect(presetFor(56.5)?.system).toBe(48);
+    expect(presetFor(24)).toBeUndefined();
+    expect(presetFor(0)).toBeUndefined();
   });
 });

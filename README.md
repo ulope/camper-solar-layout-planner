@@ -29,7 +29,9 @@ https://ulope.github.io/camper-solar-layout-planner/
     cheaper build. The number of MPPT controllers required is still not considered.
   - On a 24 V or 48 V system, set the **minimum string voltage** in the optimizer dropdown
     and fill in each model's **voltage**, so low-voltage panels are only planned where
-    enough of them fit to make a usable series string.
+    enough of them fit to make a usable series string. The presets plan against what the
+    bank charges to (28.7 V and 56.5 V), not its nominal name; the threshold field takes
+    any other figure.
 - The `Fast` optimizer usually gives good results on simple layout
 - The `Thorough` one usually gives noticeably better results on complex layouts with many keep-out zones.
 - If you have the option, try moving the keep out zones and see if this gives better results
@@ -68,11 +70,14 @@ https://ulope.github.io/camper-solar-layout-planner/
   - **Thorough** — a deeper ~5-second search that runs in a Web Worker with live
     progress and a Cancel button; never returns a worse result than Fast.
 - **Minimum string voltage** *(optional)* — a hard filter in the optimizer dropdown for
-  24 V or 48 V systems, with one-click **Off / 24 V / 48 V** presets and a custom field.
-  Panels of one model are wired as a series string, so a model whose Vmp is below the
-  threshold is only placed when enough of them fit on the same surface to add up to it —
-  a single 12 V panel is never planned for a 24 V system, but a pair of them is. Models
-  with no voltage recorded are never restricted, and the dropdown says how many those are.
+  24 V or 48 V systems, with one-click **Off / 24 V / 48 V** presets and an editable
+  threshold. Panels of one model are wired as a series string, so a model whose Vmp is
+  below the threshold is only placed when enough of them fit on the same surface to add
+  up to it — a single 12 V panel is never planned for a 24 V system, but three of them
+  are. The presets are named after the *nominal* system voltage but plan against what the
+  bank actually charges to: **28.7 V** for a 24 V system and **56.5 V** for a 48 V one
+  (see below). Models with no voltage recorded are never restricted, and the dropdown says
+  how many those are.
 - **Secondary criteria** *(optional)* — rank near-equal layouts by **weight**, **price**
   and/or **number of distinct panel models used**, in a priority order you choose. Total
   Wp remains the primary objective, and the adjustable **tolerance** (default 10%) applies
@@ -124,6 +129,26 @@ best found so far.
 Both effort levels keep the best layout of each distinct *panel composition* (the per-model
 counts), so the candidate pool holds genuinely different builds rather than reshuffles of
 the same one.
+
+**The preset thresholds** are deliberately not the nominal system voltage, which no
+system charges at. Each is **95% of the bank's charge-end voltage, plus 1 V**:
+
+| System | Charges to | Threshold |
+| --- | --- | --- |
+| 24 V | 29.2 V | **28.7 V** |
+| 48 V | 58.4 V | **56.5 V** |
+
+The charge-end figure is 3.65 V per LiFePO4 cell over 8 or 16 cells, which is also where
+the other common chemistries land (a 7S/14S Li-ion NMC pack tops out at 29.4 / 58.8 V,
+AGM absorption at 28.8 / 57.6 V), so one figure per system voltage covers them all.
+
+Sitting *below* the charge-end voltage — and below the ~5 V an MPPT wants on top of the
+battery to start — is the point: a string that drops out over the last few percent of a
+charge costs almost nothing, because the battery is nearly full by the time it does,
+whereas demanding the full charge-end plus start-up margin would rule out panels that
+carry all but the last minutes of the charge. Panel voltage also falls with cell
+temperature, which the catalog does not record, so the headroom is left rather than
+demanded. Type any other figure into the threshold field to plan against your own numbers.
 
 **Minimum string voltage** is a constraint rather than a criterion, so it acts *during*
 the search. Whether a sub-threshold model is admissible depends on how many of it a layout

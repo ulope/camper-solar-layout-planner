@@ -14,11 +14,9 @@
     voltageRestricted,
   } from '../lib/stores';
   import { ALL_CRITERIA, CRITERION_LABELS, type SecondaryCriterion } from '../lib/ranking';
+  import { SYSTEM_VOLTAGE_PRESETS, presetFor } from '../lib/voltage';
 
   let optionsOpen = $state(false);
-
-  // The system voltages worth one click; anything else goes in the custom field.
-  const VOLTAGE_PRESETS = [0, 24, 48];
 
   const elapsedS = $derived(($optimizeProgress.elapsedMs / 1000).toFixed(1));
   // Which surface is being worked on, when there is more than one. Built here rather
@@ -63,6 +61,8 @@
   }
 
   const minVoltage = $derived($config.minVoltage ?? 0);
+  // The system a one-click preset stands for, when the threshold is still one of them.
+  const preset = $derived(presetFor(minVoltage));
   // Named so the restricted list reads as a sentence rather than a table.
   const restrictedNote = $derived(
     $voltageRestricted
@@ -120,24 +120,30 @@
 
       <p class="group">Minimum string voltage</p>
       <div class="effort" role="group" aria-label="Minimum string voltage">
-        {#each VOLTAGE_PRESETS as v (v)}
+        <button
+          class="seg"
+          class:on={minVoltage === 0}
+          onclick={() => setMinVoltage(0)}
+          title="Place any panel model">Off</button
+        >
+        {#each SYSTEM_VOLTAGE_PRESETS as p (p.system)}
           <button
             class="seg"
-            class:on={minVoltage === v}
-            onclick={() => setMinVoltage(v)}
-            title={v === 0 ? 'Place any panel model' : `For a ${v} V system`}
-            >{v === 0 ? 'Off' : `${v} V`}</button
+            class:on={minVoltage === p.minVoltage}
+            onclick={() => setMinVoltage(p.minVoltage)}
+            title="{p.system} V system — strings must reach {p.minVoltage} V"
+            >{p.system} V</button
           >
         {/each}
       </div>
       <label class="tol" for="min-voltage">
-        Custom
+        Threshold
         <span class="tolin">
           <input
             id="min-voltage"
             type="number"
             min="0"
-            step="1"
+            step="0.1"
             value={minVoltage}
             oninput={setMinVoltageFrom}
           />
@@ -146,6 +152,10 @@
       </label>
       {#if minVoltage > 0}
         <p class="note">
+          {#if preset}
+            A {preset.system} V bank charges to about {preset.chargeEnd} V, so a string is
+            planned against {preset.minVoltage} V — 95% of that, plus 1 V.
+          {/if}
           A model's panels are wired as one series string, so a panel below
           {minVoltage} V is only placed when enough of them fit on the same surface.
         </p>

@@ -12,6 +12,44 @@ import type { PanelOption, Placement } from './types';
  * {@link seriesCountFor} of it.
  */
 
+/**
+ * Charge-end voltage of a nominal system voltage, in V: 3.65 V per LiFePO4 cell over 8 or
+ * 16 cells. A "24 V" system charges nowhere near 24 V, and the other common chemistries
+ * land in the same place — a 7S/14S Li-ion NMC pack tops out at 29.4 / 58.8 V and AGM
+ * absorption sits at 28.8 / 57.6 V — so one figure per system voltage covers them all.
+ */
+const CHARGE_END: Record<number, number> = { 24: 29.2, 48: 58.4 };
+
+/**
+ * The panel voltage a system is planned against: 95% of its charge-end voltage, plus 1 V.
+ *
+ * Deliberately below both the charge-end voltage and the ~5 V an MPPT wants to start:
+ * a string that drops out over the last few percent of a charge costs almost nothing,
+ * because the battery is nearly full by the time it does, whereas sizing for the full
+ * charge-end plus start-up margin would rule out panels that carry all but the last
+ * minutes of the charge. Voltage also falls with cell temperature, which the catalog does
+ * not record — the same reason to leave headroom rather than demand it.
+ */
+const cutoffFor = (chargeEnd: number) => Math.round((0.95 * chargeEnd + 1) * 10) / 10;
+
+export type SystemVoltagePreset = {
+  system: number; // nominal system voltage, as the battery bank is spoken about
+  chargeEnd: number; // V the bank actually charges to
+  minVoltage: number; // V a string must reach to be planned for it
+};
+
+/** The one-click system voltages, in the order the picker shows them. */
+export const SYSTEM_VOLTAGE_PRESETS: SystemVoltagePreset[] = [24, 48].map((system) => ({
+  system,
+  chargeEnd: CHARGE_END[system],
+  minVoltage: cutoffFor(CHARGE_END[system]),
+}));
+
+/** The preset a threshold came from, when it matches one exactly. */
+export function presetFor(minVoltage: number): SystemVoltagePreset | undefined {
+  return SYSTEM_VOLTAGE_PRESETS.find((p) => p.minVoltage === minVoltage);
+}
+
 // Guards against 24 / 12 landing at 2.0000000000000004 and demanding a third panel.
 const EPS = 1e-9;
 
