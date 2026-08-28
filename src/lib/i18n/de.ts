@@ -87,11 +87,11 @@ export const de: Catalog = {
   'panelModal.rigid': 'Starr',
   'panelModal.flexible': 'Flexibel',
   'panelModal.rigidTitle':
-    'Gerahmtes Modul; nur Flächen, die starre Module zulassen, nehmen es auf',
+    'Gerahmtes Modul; kann nur auf Flächen, die starre Module zulassen, platziert werden',
   'panelModal.flexibleTitle':
-    'Biegsames Modul; nur Flächen, die flexible Module zulassen, nehmen es auf',
+    'Biegsames Modul; kann nur auf Flächen, die flexible Module zulassen, platziert werden',
   'panelModal.hint':
-    'Spannung, Strom, Gewicht und Preis sind optional. Gewicht und Preis fließen in die optionalen Optimierungskriterien ein; fehlende Werte zählen dort als null.',
+    'Spannung, Strom, Gewicht und Preis sind optional. Gewicht und Preis fließen in die optionalen Optimierungskriterien ein; fehlende Werte zählen dort als Null.',
   'panelModal.densityStat': '{value} Wp/m²',
   'panelModal.priceStat': '{value}/Wp',
 
@@ -125,9 +125,9 @@ export const de: Catalog = {
   'optimizer.threshold': 'Schwelle',
   'optimizer.details': 'Details …',
   'optimizer.voltagePresetNote':
-    'Ein {system}-V-Speicher lädt auf etwa {chargeEnd} V, daher wird ein Strang gegen {min} V geplant – 95 % davon, plus 1 V.',
+    'Ein {system}-V-Speicher lädt bis auf etwa {chargeEnd} V, pro Strang wird mit {min} V geplant – 95 % der Maximalspannung, plus 1 V.',
   'optimizer.voltageNote':
-    'Die Module eines Modells werden als ein Reihenstrang verschaltet. Ein Modul unter {min} V wird deshalb nur platziert, wenn genügend davon auf dieselbe Fläche passen.',
+    'Ein Modul unter {min} V wird nur platziert, wenn genügend davon auf dieselbe Fläche passen, so dass eine Reihenschaltung hergestellt werden kann.',
   'optimizer.restrictedHead': 'Nur nutzbar in Strängen von:',
   'optimizer.restrictedNeed': '{count} × {voltage} V',
   'optimizer.voltageGap': {
