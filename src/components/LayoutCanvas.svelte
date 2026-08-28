@@ -12,6 +12,7 @@
   import { panelColor } from '../lib/colors';
   import { snap } from '../lib/geometry';
   import { surfaceColumn, columnExtent, surfaceAtPoint, type PlacedSurface } from '../lib/surfaces';
+  import { wrapText } from '../lib/textwrap';
   import { fmt, t } from '../lib/i18n';
   import type { Rect } from '../lib/types';
 
@@ -41,6 +42,13 @@
 
   const RULER = 30; // gutter thickness for the rulers, px
   const PAD = 18; // padding between rulers and the surface stack
+
+  // Panel label metrics, px. Names wrap to the panel width; the height budget caps how
+  // many name lines fit above the power line.
+  const NAME_FONT = '600 11px system-ui, sans-serif';
+  const NAME_LINE_H = 12;
+  const POWER_LINE_H = 14;
+  const LABEL_PAD = 4; // inset from the panel edge
 
   /**
    * Surfaces stacked top to bottom in world space. Everything below works in world
@@ -492,6 +500,7 @@
       ctx.strokeRect(px, py, pw, ph);
 
       // Label: panel name + power, stacked when there is room, else just power.
+      // Long names wrap to the panel width so they never spill over neighbors.
       const cx = px + pw / 2;
       const cy = py + ph / 2;
       const name = nameForOption(p.optionId);
@@ -500,10 +509,19 @@
       ctx.textBaseline = 'middle';
       const powerLabel = $t('canvas.power', { power: $fmt.num(p.power, 0) });
       if (name && pw > 44 && ph > 32) {
-        ctx.font = '600 11px system-ui, sans-serif';
-        ctx.fillText(name, cx, cy - 7);
+        ctx.font = NAME_FONT;
+        const budget = ph - 2 * LABEL_PAD - POWER_LINE_H;
+        const maxLines = Math.max(1, Math.floor(budget / NAME_LINE_H));
+        const measure = (s: string) => ctx.measureText(s).width;
+        const lines = wrapText(name, pw - 2 * LABEL_PAD, measure, maxLines);
+        const total = lines.length * NAME_LINE_H + POWER_LINE_H;
+        let ty = cy - total / 2 + NAME_LINE_H / 2;
+        for (const line of lines) {
+          ctx.fillText(line, cx, ty);
+          ty += NAME_LINE_H;
+        }
         ctx.font = '10px system-ui, sans-serif';
-        ctx.fillText(powerLabel, cx, cy + 7);
+        ctx.fillText(powerLabel, cx, ty - NAME_LINE_H / 2 + POWER_LINE_H / 2);
       } else if (pw > 30 && ph > 16) {
         ctx.font = '600 10px system-ui, sans-serif';
         ctx.fillText(powerLabel, cx, cy);
