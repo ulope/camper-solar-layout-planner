@@ -176,3 +176,38 @@ describe('optimizeThorough', () => {
     expect(result[0].placements.length).toBeGreaterThan(0);
   });
 });
+
+describe('optimizeThorough minimum string voltage', () => {
+  const low: PanelOption = { id: 'low', name: 'low', width: 100, height: 100, power: 100, voltage: 12 };
+  const compliant: PanelOption = { id: 'hi', name: 'hi', width: 50, height: 100, power: 40, voltage: 24 };
+
+  it('never returns a layout with a string below the threshold', () => {
+    const config = baseConfig({ width: 150, panelOptions: [low, compliant], minVoltage: 24 });
+    const layouts = optimizeThorough(config, FIXED);
+    for (const l of layouts) {
+      const counts = new Map<string, number>();
+      for (const p of l.placements) counts.set(p.optionId, (counts.get(p.optionId) ?? 0) + 1);
+      expect(counts.get('low') ?? 0).not.toBe(1);
+    }
+  });
+
+  it('still finds the best compliant layout', () => {
+    // Unrestricted the surface is worth 140 Wp, but that layout leaves a lone 12 V panel.
+    const config = baseConfig({ width: 150, panelOptions: [low, compliant] });
+    expect(optimizeThorough(config, FIXED)[0].totalPower).toBe(140);
+    expect(optimizeThorough({ ...config, minVoltage: 24 }, FIXED)[0].totalPower).toBe(120);
+  });
+
+  it('uses a sub-threshold model where enough of it fits', () => {
+    const config = baseConfig({ panelOptions: [low], minVoltage: 24 });
+    const best = optimizeThorough(config, FIXED)[0];
+    expect(best.placements).toHaveLength(2); // 2 x 12 V in series
+  });
+
+  it('is unchanged when the threshold restricts nothing', () => {
+    const config = baseConfig({ width: 150, panelOptions: [low, compliant] });
+    expect(optimizeThorough({ ...config, minVoltage: 12 }, FIXED)).toEqual(
+      optimizeThorough(config, FIXED),
+    );
+  });
+});

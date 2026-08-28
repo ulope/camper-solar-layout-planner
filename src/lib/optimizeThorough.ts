@@ -14,6 +14,7 @@ import {
 } from './optimize';
 import { rankLayouts, type RankOptions } from './ranking';
 import { packablePanels } from './panels';
+import { minVoltageFilter } from './voltage';
 
 const EPS = 1e-6;
 
@@ -60,6 +61,11 @@ function freeAround(geom: Rect[], survivors: Placement[], gap: number): Rect[] {
  * randomized greedy pass. Walks plateaus (a candidate matching the current power is
  * accepted as the new starting point, so equal-Wp rearrangements can unlock later
  * gains) but only ever returns the highest-Wp layout seen.
+ *
+ * `constrain` drops panels that fall short of the minimum string voltage, and does so
+ * *before* the candidate is scored or carried forward — so the climb never counts Wp it
+ * is not allowed to keep, and the area those panels held is free again for the next
+ * refill to hand to a compliant model.
  */
 function localSearch(
   start: Placement[],
@@ -68,6 +74,7 @@ function localSearch(
   config: SurfaceTask,
   rng: () => number,
   steps: number,
+  constrain: (p: Placement[]) => Placement[],
 ): Placement[] {
   const gap = config.panelGap;
   let current = start;
@@ -91,7 +98,7 @@ function localSearch(
     const models = shuffled(valid, rng).map((o) => toModel(o, gap, mode));
     const refill = packInOrder(free, models, rule, rng, 0.15 + rng() * 0.35);
 
-    const candidate = [...survivors, ...refill];
+    const candidate = constrain([...survivors, ...refill]);
     const power = totalPower(candidate);
     if (power >= currentPower - EPS) {
       current = candidate;
@@ -166,6 +173,10 @@ const ISLANDS = 2;
  *    (the elite pool), which steadily tightens the best-known result instead of
  *    hoping a from-scratch sample lands higher.
  *
+ * Every candidate passes through the minimum-string-voltage filter (see
+ * {@link ./voltage}) before it is scored, so the search optimizes the Wp it is actually
+ * allowed to keep rather than discovering a violating layout and losing it later.
+ *
  * The exploit half is what makes the result stable: without it every iteration is
  * an independent draw, so tiny input changes (a keep-out nudged 1cm, one extra
  * panel model) visibly shift where the best sample happens to land. Iterations are
@@ -189,6 +200,9 @@ export function optimizeThorough(config: SurfaceTask, opts: ThoroughOpts = {}): 
 
   const usable = usableArea(config);
   const valid = packablePanels(config.panelOptions);
+  // Minimum-string-voltage enforcement, applied to every layout the search produces.
+  // A no-op unless the threshold actually restricts one of this catalog's models.
+  const constrain = minVoltageFilter(config.panelOptions, config.minVoltage);
 
   // Seed with the fast result — guarantees Thorough ≥ Fast.
   const byComposition = new Map<string, Layout>();
@@ -265,17 +279,19 @@ export function optimizeThorough(config: SurfaceTask, opts: ThoroughOpts = {}): 
       // refill. (Tightened geometries stay the explore half's job — mixing them
       // in here measurably slows convergence.)
       const elite = pool[Math.floor(rng() * pool.length)].placements;
-      placements = localSearch(elite, realGeom, valid, config, rng, 8);
+      placements = localSearch(elite, realGeom, valid, config, rng, 8, constrain);
     } else {
       const geom = geometries[Math.floor(rng() * geometries.length)];
       const rule = RULES[Math.floor(rng() * RULES.length)];
       const mode = MODES[Math.floor(rng() * MODES.length)];
       const models = shuffled(valid, rng).map((o) => toModel(o, config.panelGap, mode));
       const alpha = 0.1 + rng() * 0.4;
-      placements = packInOrder(geom, models, rule, rng, alpha);
-      placements = localSearch(placements, geom, valid, config, rng, 4);
+      placements = constrain(packInOrder(geom, models, rule, rng, alpha));
+      placements = localSearch(placements, geom, valid, config, rng, 4, constrain);
     }
-    placements = upgradePass(placements, valid, config.panelGap);
+    // The upgrade pass swaps in higher-power models, which can leave a lone panel of a
+    // sub-threshold one behind, so re-apply the filter to what it produced.
+    placements = constrain(upgradePass(placements, valid, config.panelGap));
     consider(pool, placements);
 
     if (onProgress && now() - lastProgress > 150) {

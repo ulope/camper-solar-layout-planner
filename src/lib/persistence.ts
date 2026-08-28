@@ -27,6 +27,7 @@ export function defaultConfig(): Config {
     edgeMargin: 3,
     panelGap: 2,
     gridSnap: 1,
+    minVoltage: 0,
     panelOptions: [
       { id: 'panel-1', name: '100 W mono', width: 100, height: 50, power: 100, weight: 5.5, price: 89 },
       { id: 'panel-2', name: '175 W mono', width: 148, height: 67, power: 175, weight: 9.5, price: 159 },
@@ -48,6 +49,9 @@ function commonFields(c: Record<string, unknown>) {
     panelGap: c.panelGap,
     // Absent in the earliest payloads, which predate the snap setting.
     gridSnap: isNum(c.gridSnap) ? c.gridSnap : 1,
+    // Absent before the voltage filter existed, and 0 is how "no restriction" is stored,
+    // so a missing or nonsensical value normalizes to the unrestricted behaviour.
+    minVoltage: isNum(c.minVoltage) && c.minVoltage > 0 ? c.minVoltage : 0,
     panelOptions: c.panelOptions as Config['panelOptions'],
   };
 }

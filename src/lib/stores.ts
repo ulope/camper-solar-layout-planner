@@ -4,6 +4,7 @@ import { loadConfig, saveConfig } from './persistence';
 import { optimizeFastAll, optimizeThoroughAll } from './optimizeAll';
 import { ALL_CRITERIA, DEFAULT_RANK, type RankOptions, type SecondaryCriterion } from './ranking';
 import { isPanelEnabled } from './panels';
+import { panelVoltage, restrictedPanels } from './voltage';
 
 /** How hard the optimizer searches. 'fast' is the instant sweep; 'thorough' runs ~5s. */
 export type OptimizerEffort = 'fast' | 'thorough';
@@ -114,8 +115,17 @@ export const panelDataGaps = derived(config, ($c) => {
     total: active.length,
     weight: active.filter((p) => !(typeof p.weight === 'number' && p.weight > 0)).length,
     price: active.filter((p) => !(typeof p.price === 'number' && p.price > 0)).length,
+    voltage: active.filter((p) => panelVoltage(p) === undefined).length,
   };
 });
+
+/**
+ * The selected models the minimum string voltage restricts, and how many of each a layout
+ * must place before it may use them at all. Empty when no threshold is set.
+ */
+export const voltageRestricted = derived(config, ($c) =>
+  restrictedPanels($c.panelOptions.filter(isPanelEnabled), $c.minVoltage ?? 0),
+);
 
 /** True while a thorough (worker) optimization is running. */
 export const optimizing = writable<boolean>(false);
@@ -273,6 +283,16 @@ export function updatePanelOption(id: string, patch: Partial<PanelOption>): void
 /** Include or exclude a model from optimization without deleting it. */
 export function setPanelEnabled(id: string, enabled: boolean): void {
   updatePanelOption(id, { enabled });
+}
+
+/**
+ * Set the minimum series-string voltage the optimizer must respect, in V; 0 turns the
+ * filter off. Lives on the config rather than beside the effort/criteria settings because
+ * it describes the installation itself, so it belongs in an exported plan.
+ */
+export function setMinVoltage(volts: number): void {
+  const clean = Number.isFinite(volts) && volts > 0 ? volts : 0;
+  config.update((c) => ({ ...c, minVoltage: clean }));
 }
 
 export function removePanelOption(id: string): void {
