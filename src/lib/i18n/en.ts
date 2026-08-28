@@ -196,8 +196,12 @@ export const en = {
   'canvas.unit': 'cm',
   'canvas.stale': 'Config changed — re-run optimize',
   'canvas.hint':
-    'Drag a surface to add a keep-out · drag a keep-out to move · drag its edges to resize',
+    'Drag a surface to add a keep-out · drag a keep-out to move or its edges to resize · scroll to zoom · drag the background to pan',
   'canvas.readout': '{x}, {y} cm',
+  'canvas.zoomIn': 'Zoom in',
+  'canvas.zoomOut': 'Zoom out',
+  'canvas.zoomReset': 'Reset view',
+  'canvas.zoomLevel': '{percent}%',
   'canvas.size': '{width} × {height} cm',
   'canvas.power': '{power} Wp',
 

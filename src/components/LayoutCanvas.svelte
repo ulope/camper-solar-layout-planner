@@ -12,6 +12,16 @@
   import { panelColor } from '../lib/colors';
   import { snap } from '../lib/geometry';
   import { surfaceColumn, columnExtent, surfaceAtPoint, type PlacedSurface } from '../lib/surfaces';
+  import {
+    fitView,
+    applyViewport,
+    zoomAt,
+    clampPan,
+    RESET_VIEWPORT,
+    MIN_ZOOM,
+    MAX_ZOOM,
+    type Viewport,
+  } from '../lib/view';
   import { wrapText } from '../lib/textwrap';
   import { fmt, t } from '../lib/i18n';
   import type { Rect } from '../lib/types';
@@ -23,7 +33,7 @@
   let cursor = $state('crosshair');
 
   // Interaction state.
-  type Mode = 'idle' | 'draw' | 'move' | 'resize';
+  type Mode = 'idle' | 'draw' | 'move' | 'resize' | 'pan' | 'pinch';
   type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
   let mode: Mode = $state('idle');
   let dragStart: { x: number; y: number } | null = null;
@@ -33,6 +43,12 @@
   let moveOffset = { x: 0, y: 0 };
   let resizeId: string | null = null;
   let resizeHandle: Handle | null = null;
+  let panStart: { px: number; py: number; panX: number; panY: number } | null = null;
+  /** Live touch points, keyed by pointer id — two of them drive a pinch. */
+  const touches = new Map<number, { x: number; y: number }>();
+  let pinchStart:
+    | { dist: number; cx: number; cy: number; zoom: number; panX: number; panY: number }
+    | null = null;
 
   const HANDLE_TOL = 7; // px proximity to a keep-out edge to grab a resize handle
   const MIN_KO = 2; // minimum keep-out size, cm
@@ -58,14 +74,45 @@
   const column = $derived(surfaceColumn($config.surfaces));
   const extent = $derived(columnExtent(column));
 
+  /**
+   * View state. Zoom is a multiplier on the fit-to-window baseline rather than an absolute
+   * scale, so resizing the window or adding a surface still refits the stack while keeping
+   * the user's zoom. It is deliberately component-local: putting it in `config` would mark
+   * every layout stale and rewrite localStorage on each wheel tick.
+   */
+  let zoom = $state(RESET_VIEWPORT.zoom);
+  let panX = $state(RESET_VIEWPORT.panX);
+  let panY = $state(RESET_VIEWPORT.panY);
+
+  const fit = $derived(fitView(cw, ch, extent, RULER, PAD));
+  const current = $derived(applyViewport(fit, { zoom, panX, panY }, cw, ch, RULER, PAD));
+
+  /** The active transform. A function so the many `v = view()` call sites stay as they are. */
   function view() {
-    const availW = cw - RULER - PAD * 2;
-    const availH = ch - RULER - PAD * 2;
-    const scale = Math.min(availW / extent.w, availH / extent.h) || 1;
-    const offX = RULER + PAD + Math.max(0, (availW - extent.w * scale) / 2);
-    const offY = RULER + PAD + Math.max(0, (availH - extent.h * scale) / 2);
-    return { scale, offX, offY };
+    return current;
   }
+
+  const viewport = (): Viewport => ({ zoom, panX, panY });
+
+  /** Adopt a new viewport, keeping the content from being pushed off screen. */
+  function setViewport(vp: Viewport) {
+    const c = clampPan(vp, fit, extent, cw, ch, RULER, PAD);
+    zoom = c.zoom;
+    panX = c.panX;
+    panY = c.panY;
+  }
+
+  const ZOOM_STEP = 1.3; // per button press / keyboard nudge
+  const PAN_STEP = 40; // px per arrow key press
+  /** Center of the content area — the anchor for zooming without a cursor position. */
+  const canvasCenter = () => ({ x: (RULER + cw) / 2, y: (RULER + ch) / 2 });
+
+  function zoomAbout(factor: number, at: { x: number; y: number }) {
+    setViewport(zoomAt(viewport(), fit, factor, at, cw, ch, RULER, PAD));
+  }
+
+  const zoomBy = (factor: number) => zoomAbout(factor, canvasCenter());
+  const resetView = () => setViewport(RESET_VIEWPORT);
 
   const toPxX = (x: number, v = view()) => v.offX + x * v.scale;
   const toPxY = (y: number, v = view()) => v.offY + y * v.scale;
@@ -205,7 +252,11 @@
     // Top ruler (horizontal scale, shared by every surface).
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    for (let cm = 0; cm <= extent.w + 0.001; cm += minor) {
+    // Only walk the ticks that can land in the visible span — at high zoom the rest of
+    // the extent is far off screen.
+    const hFrom = Math.max(0, Math.floor((RULER - v.offX) / v.scale / minor) * minor);
+    const hTo = Math.min(extent.w, (cw - v.offX) / v.scale);
+    for (let cm = hFrom; cm <= hTo + 0.001; cm += minor) {
       const px = toPxX(cm, v);
       if (px < RULER || px > cw) continue;
       const major = isMajor(cm);
@@ -220,7 +271,11 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const p of column) {
-      for (let cm = 0; cm <= p.surface.height + 0.001; cm += minor) {
+      const top = toPxY(p.y0, v);
+      if (top > ch || toPxY(p.y0 + p.surface.height, v) < RULER) continue; // off screen
+      const vFrom = Math.max(0, Math.floor((RULER - top) / v.scale / minor) * minor);
+      const vTo = Math.min(p.surface.height, (ch - top) / v.scale);
+      for (let cm = vFrom; cm <= vTo + 0.001; cm += minor) {
         const py = toPxY(p.y0 + cm, v);
         if (py < RULER || py > ch) continue;
         const major = isMajor(cm);
@@ -437,6 +492,10 @@
     const oy = toPxY(y0, v);
     const rw = surface.width * v.scale;
     const rh = surface.height * v.scale;
+    // Skip surfaces panned out of view. The margin keeps the name label, which sits just
+    // above the body, from popping in and out at the top edge.
+    const LABEL_MARGIN = 24;
+    if (ox > cw || ox + rw < 0 || oy - LABEL_MARGIN > ch || oy + rh < 0) return;
 
     // Name label, in the gap above the surface.
     ctx.font = '600 12px system-ui, sans-serif';
@@ -472,12 +531,17 @@
       ctx.strokeStyle = 'rgba(123, 138, 153, 0.12)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (let cm = $config.gridSnap; cm < surface.width; cm += $config.gridSnap) {
+      const g = $config.gridSnap;
+      const gFrom = (fromPx: number, off: number) =>
+        Math.max(g, Math.ceil((fromPx - off) / v.scale / g) * g);
+      const xTo = Math.min(surface.width, (cw - ox) / v.scale);
+      for (let cm = gFrom(0, ox); cm < xTo; cm += g) {
         const x = Math.round(toPxX(cm, v)) + 0.5;
         ctx.moveTo(x, oy);
         ctx.lineTo(x, oy + rh);
       }
-      for (let cm = $config.gridSnap; cm < surface.height; cm += $config.gridSnap) {
+      const yTo = Math.min(surface.height, (ch - oy) / v.scale);
+      for (let cm = gFrom(0, oy); cm < yTo; cm += g) {
         const y = Math.round(toPxY(y0 + cm, v)) + 0.5;
         ctx.moveTo(ox, y);
         ctx.lineTo(ox + rw, y);
@@ -667,6 +731,9 @@
       mode,
       cw,
       ch,
+      zoom,
+      panX,
+      panY,
     ];
     draw();
   });
@@ -677,7 +744,22 @@
     pointer = { px: e.clientX - r.left, py: e.clientY - r.top, cx: c.x, cy: c.y };
   }
 
+  /** Canvas-relative pixel position of a pointer event. */
+  function pxAt(e: { clientX: number; clientY: number }) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
   function onPointerDown(e: PointerEvent) {
+    if (e.pointerType === 'touch') {
+      touches.set(e.pointerId, pxAt(e));
+      if (touches.size === 2) {
+        // A second finger takes over as a pinch: abandon whatever the first one started
+        // so releasing it cannot commit a stray keep-out.
+        startPinch();
+        return;
+      }
+    }
     if (e.button !== 0) return;
     const r = canvas.getBoundingClientRect();
     const grab = handleAt(e.clientX - r.left, e.clientY - r.top);
@@ -697,8 +779,12 @@
     const raw = cmAt(e.clientX, e.clientY);
     const placed = placedAt(raw.x, raw.y);
     if (!placed) {
-      // A press in the gap between surfaces only clears the selection.
+      // A press in the gap between surfaces clears the selection and pans the view.
       selectedKeepOut.set(null);
+      mode = 'pan';
+      panStart = { px: e.clientX, py: e.clientY, panX, panY };
+      cursor = 'grabbing';
+      canvas.setPointerCapture(e.pointerId);
       return;
     }
     activeSurfaceId.set(placed.surface.id);
@@ -724,9 +810,20 @@
   }
 
   function onPointerMove(e: PointerEvent) {
+    if (e.pointerType === 'touch' && touches.has(e.pointerId)) touches.set(e.pointerId, pxAt(e));
+    if (mode === 'pinch') {
+      pinchMove();
+      return;
+    }
     updatePointer(e);
 
-    if (mode === 'draw' && dragStart) {
+    if (mode === 'pan' && panStart) {
+      setViewport({
+        zoom,
+        panX: panStart.panX + (e.clientX - panStart.px),
+        panY: panStart.panY + (e.clientY - panStart.py),
+      });
+    } else if (mode === 'draw' && dragStart) {
       const placed = placedById(dragSurfaceId);
       if (placed) {
         const { x: x2, y: y2 } = clampedLocal(e.clientX, e.clientY, placed);
@@ -759,7 +856,7 @@
       else {
         const raw = cmAt(e.clientX, e.clientY);
         const placed = placedAt(raw.x, raw.y);
-        if (!placed) cursor = 'default';
+        if (!placed) cursor = 'grab'; // the background pans
         else cursor = keepOutAtLocal(placed, raw.x, raw.y - placed.y0) ? 'grab' : 'crosshair';
       }
     }
@@ -789,7 +886,17 @@
     updateKeepOut(resizeId!, { x, y, w, h });
   }
 
-  function onPointerUp() {
+  function onPointerUp(e: PointerEvent) {
+    if (e.pointerType === 'touch') touches.delete(e.pointerId);
+    if (mode === 'pinch') {
+      // Stay out of the way until the last finger lifts; a single leftover finger must not
+      // start drawing halfway through a gesture.
+      if (touches.size === 0) {
+        mode = 'idle';
+        pinchStart = null;
+      }
+      return;
+    }
     if (mode === 'draw' && dragRect && dragSurfaceId && dragRect.w >= 2 && dragRect.h >= 2) {
       const id = addKeepOut(dragRect, dragSurfaceId);
       selectedKeepOut.set(id);
@@ -801,11 +908,120 @@
     moveId = null;
     resizeId = null;
     resizeHandle = null;
+    panStart = null;
     cursor = 'crosshair';
   }
 
   function onPointerLeave() {
     if (mode === 'idle') pointer = null;
+  }
+
+  /** Switch to a two-finger gesture, discarding any single-finger drag in progress. */
+  function startPinch() {
+    const [a, b] = [...touches.values()];
+    mode = 'pinch';
+    dragStart = null;
+    dragRect = null;
+    dragSurfaceId = null;
+    moveId = null;
+    resizeId = null;
+    resizeHandle = null;
+    panStart = null;
+    cursor = 'grabbing';
+    pinchStart = {
+      dist: Math.hypot(b.x - a.x, b.y - a.y) || 1,
+      cx: (a.x + b.x) / 2,
+      cy: (a.y + b.y) / 2,
+      zoom,
+      panX,
+      panY,
+    };
+  }
+
+  /** Zoom by the spread ratio about the starting centroid, then follow the centroid. */
+  function pinchMove() {
+    if (!pinchStart || touches.size !== 2) return;
+    const [a, b] = [...touches.values()];
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    const cx = (a.x + b.x) / 2;
+    const cy = (a.y + b.y) / 2;
+    const from = { zoom: pinchStart.zoom, panX: pinchStart.panX, panY: pinchStart.panY };
+    const anchor = { x: pinchStart.cx, y: pinchStart.cy };
+    const zoomed = zoomAt(from, fit, dist / pinchStart.dist, anchor, cw, ch, RULER, PAD);
+    setViewport({
+      zoom: zoomed.zoom,
+      panX: zoomed.panX + (cx - anchor.x),
+      panY: zoomed.panY + (cy - anchor.y),
+    });
+  }
+
+  /**
+   * Wheel zooms at the cursor. Shift (or a trackpad's horizontal axis) pans sideways
+   * instead; ctrl/meta is what browsers send for a trackpad pinch, so it zooms too.
+   */
+  function onWheel(e: WheelEvent) {
+    e.preventDefault();
+    // Normalize the delta to pixels: line and page modes report far smaller numbers.
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? ch : 1;
+    const horizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+    if (horizontal && !e.ctrlKey && !e.metaKey) {
+      const dx = (e.deltaX || e.deltaY) * unit;
+      setViewport({ zoom, panX: panX - dx, panY });
+      return;
+    }
+    zoomAbout(Math.exp(-e.deltaY * unit * 0.0015), pxAt(e));
+  }
+
+  /** Double-clicking the empty background refits the view. */
+  function onDoubleClick(e: MouseEvent) {
+    const raw = cmAt(e.clientX, e.clientY);
+    if (!placedAt(raw.x, raw.y)) resetView();
+  }
+
+  /**
+   * View keys, handled on the window while the pointer is over the canvas. Keeping them
+   * off the <canvas> avoids giving a non-interactive element focus handling of its own.
+   */
+  function onKeyDown(e: KeyboardEvent) {
+    if (!pointer || e.metaKey || e.ctrlKey || e.altKey) return;
+    const el = document.activeElement;
+    if (
+      el instanceof HTMLInputElement ||
+      el instanceof HTMLTextAreaElement ||
+      el instanceof HTMLSelectElement ||
+      (el instanceof HTMLElement && el.isContentEditable)
+    ) {
+      return;
+    }
+    const d = e.shiftKey ? PAN_STEP * 4 : PAN_STEP;
+    switch (e.key) {
+      case '0':
+        resetView();
+        break;
+      case '+':
+      case '=':
+        zoomBy(ZOOM_STEP);
+        break;
+      case '-':
+      case '_':
+        zoomBy(1 / ZOOM_STEP);
+        break;
+      case 'ArrowLeft':
+        setViewport({ zoom, panX: panX + d, panY });
+        break;
+      case 'ArrowRight':
+        setViewport({ zoom, panX: panX - d, panY });
+        break;
+      case 'ArrowUp':
+        setViewport({ zoom, panX, panY: panY + d });
+        break;
+      case 'ArrowDown':
+        setViewport({ zoom, panX, panY: panY - d });
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
   }
 
   const anyPlacements = $derived(
@@ -820,7 +1036,15 @@
     ro.observe(wrap);
     cw = wrap.clientWidth;
     ch = wrap.clientHeight;
-    return () => ro.disconnect();
+    // Registered by hand so `preventDefault` is honored — wheel listeners added through
+    // the markup can end up passive.
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      ro.disconnect();
+      canvas.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', onKeyDown);
+    };
   });
 </script>
 
@@ -831,12 +1055,38 @@
     onpointerdown={onPointerDown}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
     onpointerleave={onPointerLeave}
+    ondblclick={onDoubleClick}
   ></canvas>
   {#if $layoutStale && anyPlacements}
     <div class="stale-badge">{$t('canvas.stale')}</div>
   {/if}
   <div class="hint-overlay">{$t('canvas.hint')}</div>
+  <div class="zoom-controls">
+    <button
+      type="button"
+      title={$t('canvas.zoomOut')}
+      aria-label={$t('canvas.zoomOut')}
+      disabled={zoom <= MIN_ZOOM}
+      onclick={() => zoomBy(1 / ZOOM_STEP)}>−</button
+    >
+    <span class="level">{$t('canvas.zoomLevel', { percent: $fmt.num(zoom * 100, 0) })}</span>
+    <button
+      type="button"
+      title={$t('canvas.zoomIn')}
+      aria-label={$t('canvas.zoomIn')}
+      disabled={zoom >= MAX_ZOOM}
+      onclick={() => zoomBy(ZOOM_STEP)}>+</button
+    >
+    <button
+      type="button"
+      class="reset"
+      title={$t('canvas.zoomReset')}
+      aria-label={$t('canvas.zoomReset')}
+      onclick={resetView}>⤢</button
+    >
+  </div>
 </div>
 
 <style>
@@ -864,18 +1114,71 @@
     font-weight: 600;
     pointer-events: none;
   }
+  /* Zoom cluster, mirroring the hint's chip styling. Unlike the sibling overlays it is
+     interactive, so it keeps pointer events. */
+  .zoom-controls {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    background: rgba(13, 17, 23, 0.82);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+  }
+  .zoom-controls button {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .zoom-controls button:hover:not(:disabled) {
+    background: rgba(245, 166, 35, 0.15);
+    color: var(--accent);
+  }
+  .zoom-controls button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .zoom-controls .level {
+    min-width: 44px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .zoom-controls .reset {
+    font-size: 12px;
+  }
   /* The stack can reach the bottom of the canvas, so the hint needs a backing plate to
      stay legible where it overlaps a surface. */
   .hint-overlay {
     position: absolute;
     bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
+    /* Centered inside the band left of the zoom cluster, wrapping rather than running
+       under it — the hint is long, and longer still in German. */
+    left: 10px;
+    right: 158px;
+    width: fit-content;
+    max-width: calc(100% - 168px);
+    margin: 0 auto;
     background: rgba(13, 17, 23, 0.82);
     border: 1px solid var(--border);
-    border-radius: 20px;
+    border-radius: 12px;
     padding: 4px 12px;
-    white-space: nowrap;
+    text-align: center;
+    line-height: 1.5;
     color: var(--text-dim);
     font-size: 12px;
     pointer-events: none;
