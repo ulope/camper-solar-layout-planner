@@ -63,12 +63,6 @@
   const minVoltage = $derived($config.minVoltage ?? 0);
   // The system a one-click preset stands for, when the threshold is still one of them.
   const preset = $derived(presetFor(minVoltage));
-  // Named so the restricted list reads as a sentence rather than a table.
-  const restrictedNote = $derived(
-    $voltageRestricted
-      .map((r) => `${r.option.name} (${r.option.voltage} V, needs ${r.needed})`)
-      .join(', '),
-  );
 
   function setMinVoltageFrom(e: Event) {
     setMinVoltage(Number((e.target as HTMLInputElement).value));
@@ -151,17 +145,28 @@
         </span>
       </label>
       {#if minVoltage > 0}
-        <p class="note">
-          {#if preset}
-            A {preset.system} V bank charges to about {preset.chargeEnd} V, so a string is
-            planned against {preset.minVoltage} V — 95% of that, plus 1 V.
+        <details class="more">
+          <summary>Details…</summary>
+          <p class="note">
+            {#if preset}
+              A {preset.system} V bank charges to about {preset.chargeEnd} V, so a string is
+              planned against {preset.minVoltage} V — 95% of that, plus 1 V.
+            {/if}
+            A model's panels are wired as one series string, so a panel below
+            {minVoltage} V is only placed when enough of them fit on the same surface.
+          </p>
+          {#if $voltageRestricted.length > 0}
+            <p class="rhead">Only usable in strings of:</p>
+            <ul class="restricted">
+              {#each $voltageRestricted as r (r.option.id)}
+                <li>
+                  <span class="rname" title={r.option.name}>{r.option.name}</span>
+                  <span class="rneed">{r.needed} × {r.option.voltage} V</span>
+                </li>
+              {/each}
+            </ul>
           {/if}
-          A model's panels are wired as one series string, so a panel below
-          {minVoltage} V is only placed when enough of them fit on the same surface.
-        </p>
-        {#if restrictedNote}
-          <p class="note">Restricted: {restrictedNote}.</p>
-        {/if}
+        </details>
         {#if $panelDataGaps.voltage > 0}
           <p class="warn">
             {$panelDataGaps.voltage} of {$panelDataGaps.total} model{$panelDataGaps.total === 1
@@ -370,6 +375,53 @@
   }
   .pct {
     color: var(--text-dim);
+  }
+  .more {
+    margin: 8px 0 0;
+  }
+  .more > summary {
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 2px 0;
+    user-select: none;
+  }
+  .more > summary:hover {
+    color: var(--text);
+  }
+  .rhead {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin: 8px 0 3px;
+  }
+  .restricted {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    /* A long catalog scrolls here instead of pushing the criteria off the screen. */
+    max-height: 128px;
+    overflow-y: auto;
+  }
+  .restricted li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .rname {
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rneed {
+    flex: none;
+    font-variant-numeric: tabular-nums;
   }
   .note em {
     font-style: normal;

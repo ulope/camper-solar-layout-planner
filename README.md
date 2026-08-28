@@ -77,7 +77,9 @@ https://ulope.github.io/camper-solar-layout-planner/
   are. The presets are named after the *nominal* system voltage but plan against what the
   bank actually charges to: **28.7 V** for a 24 V system and **56.5 V** for a 48 V one
   (see below). Models with no voltage recorded are never restricted, and the dropdown says
-  how many those are.
+  how many those are. A **Details…** toggle expands the reasoning together with a list of
+  every restricted model and the string it needs (e.g. `100 W mono · 2 × 18 V`), which
+  scrolls rather than growing the panel when the catalog is large.
 - **Secondary criteria** *(optional)* — rank near-equal layouts by **weight**, **price**
   and/or **number of distinct panel models used**, in a priority order you choose. Total
   Wp remains the primary objective, and the adjustable **tolerance** (default 10%) applies
