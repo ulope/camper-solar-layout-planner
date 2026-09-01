@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildLayoutPdf, type PdfReportInput, type Translate } from './report';
+import { jsPDF } from 'jspdf';
+import { buildLayoutPdf, planScale, type PdfReportInput, type Translate } from './report';
 import { decodePlan, planFromFragment, planToShare, planUrl } from '../share/plan';
 import { createFormatters } from '../format';
 import { translate } from '../i18n';
@@ -98,19 +99,138 @@ const WINANSI_PUNCTUATION: Record<number, string> = {
   151: '\u2014',
 };
 
+/** One drawn string, back from its PDF literal to the text it was written as. */
+function decode(literal: string): string {
+  return literal
+    .replace(/\\(\d{3})/g, (_, oct: string) => String.fromCharCode(parseInt(oct, 8)))
+    .replace(/\\(.)/g, '$1')
+    .split('')
+    .map((ch) => WINANSI_PUNCTUATION[ch.charCodeAt(0)] ?? ch)
+    .join('');
+}
+
 /** Every string the document draws, decoded back from the content streams. */
 function drawnText(pdf: string): string[] {
-  return [...pdf.matchAll(/\(((?:\\.|[^\\)])*)\) Tj/g)].map((m) =>
-    m[1]
-      .replace(/\\(\d{3})/g, (_, oct: string) => String.fromCharCode(parseInt(oct, 8)))
-      .replace(/\\(.)/g, '$1')
-      .split('')
-      .map((ch) => WINANSI_PUNCTUATION[ch.charCodeAt(0)] ?? ch)
-      .join(''),
-  );
+  return [...pdf.matchAll(/\(((?:\\.|[^\\)])*)\) Tj/g)].map((m) => decode(m[1]));
 }
 
 const pageCount = (pdf: string) => Number(/\/Count (\d+)/.exec(pdf)?.[1]);
+
+/**
+ * Every rectangle the document draws. jsPDF writes a rect from its top edge downward, so
+ * the height comes out negative in the stream; it is normalized here.
+ */
+function drawnRects(pdf: string): { x: number; y: number; w: number; h: number }[] {
+  return [...pdf.matchAll(/(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) re/g)].map((m) => ({
+    x: Number(m[1]),
+    y: Number(m[2]),
+    w: Number(m[3]),
+    h: Math.abs(Number(m[4])),
+  }));
+}
+
+/** Every drawn string with the position it starts at. */
+function drawnPositions(pdf: string): { text: string; x: number; y: number }[] {
+  return [
+    ...pdf.matchAll(/(-?[\d.]+) (-?[\d.]+) Td\n\(((?:\\.|[^\\)])*)\) Tj/g),
+  ].map((m) => ({ x: Number(m[1]), y: Number(m[2]), text: decode(m[3]) }));
+}
+
+/**
+ * Where a drawn string ends, which is what alignment is actually about: right-aligned
+ * cells in one column all have to finish at the same x.
+ */
+function rightEdgeOf(pdf: string, text: string, font: 'normal' | 'bold', size: number): number {
+  // A figure like "550 Wp" appears in the summary block as well as in the table; the
+  // tables come after it, so the last occurrence is the one under test.
+  const at = drawnPositions(pdf).findLast((d) => d.text === text);
+  if (!at) throw new Error(`"${text}" is not drawn`);
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  doc.setFont('helvetica', font);
+  doc.setFontSize(size);
+  return at.x + doc.getTextWidth(text);
+}
+
+describe('drawing scale', () => {
+  it('fits the widest surface to the text column', () => {
+    // 511.28pt of text column over a 400 cm surface.
+    expect(planScale([surface({ id: 'a', width: 400, height: 100 })], 511.28, 330)).toBeCloseTo(
+      511.28 / 400,
+    );
+  });
+
+  it('falls back to the height cap when a surface is deep rather than wide', () => {
+    const scale = planScale([surface({ id: 'a', width: 100, height: 400 })], 511.28, 330);
+    expect(scale).toBeCloseTo(330 / 400);
+  });
+
+  it('is bound by the largest surface in either direction', () => {
+    const surfaces = [
+      surface({ id: 'a', width: 400, height: 60 }),
+      surface({ id: 'b', width: 80, height: 300 }),
+    ];
+    expect(planScale(surfaces, 511.28, 330)).toBeCloseTo(Math.min(511.28 / 400, 330 / 300));
+  });
+
+  it('survives a degenerate surface rather than dividing by zero', () => {
+    expect(planScale([surface({ id: 'a', width: 0, height: 0 })], 511.28, 330)).toBe(1);
+    expect(planScale([], 511.28, 330)).toBe(1);
+  });
+
+  it('draws two surfaces of the same size at the same size, wherever they land', () => {
+    // The second small surface follows a full-page one, so under a per-section fit it
+    // would be squeezed into whatever space was left and come out smaller.
+    const surfaces = [
+      surface({ id: 'big', name: 'Big', width: 400, height: 200 }),
+      surface({ id: 'l', name: 'Heck L', width: 75, height: 55 }),
+      surface({ id: 'tall', name: 'Tall', width: 300, height: 190 }),
+      surface({ id: 'r', name: 'Heck R', width: 75, height: 55 }),
+    ];
+    // No layouts, so the only rectangles at the left margin are the surface bodies and
+    // the summary box; the bodies are picked out by the aspect ratio of their surface.
+    const pdf = build({ config: { ...CONFIG, surfaces }, selected: {}, selection: {} });
+    const atMargin = drawnRects(pdf).filter((r) => Math.abs(r.x - 42) < 0.01);
+    const bodiesOf = (w: number, h: number) =>
+      atMargin.filter((r) => Math.abs(r.w / r.h - w / h) < 0.001);
+
+    const hecks = bodiesOf(75, 55);
+    expect(hecks).toHaveLength(2);
+    expect(hecks[0].w).toBeCloseTo(hecks[1].w);
+    expect(hecks[0].h).toBeCloseTo(hecks[1].h);
+
+    // And every drawing shares one scale, so the sizes stay in proportion.
+    const [big] = bodiesOf(400, 200);
+    const [tall] = bodiesOf(300, 190);
+    expect(big.w / hecks[0].w).toBeCloseTo(400 / 75);
+    expect(tall.w / hecks[0].w).toBeCloseTo(300 / 75);
+  });
+});
+
+describe('table alignment', () => {
+  // Right-aligned columns have to line up across all three sections of a table; the
+  // plugin applies column styles to body cells only, which left the totals and the
+  // headers sitting to the left of the figures they belong to.
+  const pdf = build();
+
+  it('ends a total under the column it totals', () => {
+    expect(rightEdgeOf(pdf, '550 Wp', 'bold', 9)).toBeCloseTo(rightEdgeOf(pdf, '350', 'normal', 9), 1);
+    expect(rightEdgeOf(pdf, '4', 'bold', 9)).toBeCloseTo(rightEdgeOf(pdf, '2', 'normal', 9), 1);
+  });
+
+  it('ends a numeric header over its own figures', () => {
+    expect(rightEdgeOf(pdf, 'Total Wp', 'bold', 7.5)).toBeCloseTo(
+      rightEdgeOf(pdf, '350', 'normal', 9),
+      1,
+    );
+  });
+
+  it('leaves the leading text column alone', () => {
+    const model = drawnPositions(pdf).find((d) => d.text === '175 W mono')!;
+    const total = drawnPositions(pdf).find((d) => d.text === 'Total')!;
+    expect(total.x).toBeCloseTo(42, 1); // flush left, where the header sits too
+    expect(model.x).toBeGreaterThan(total.x); // indented past its color swatch
+  });
+});
 
 describe('the plan QR code', () => {
   const BASE = 'https://example.test/planner/';
