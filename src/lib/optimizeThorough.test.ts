@@ -1,11 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { optimize, taskFor } from './optimize';
+import { optimize, optimizeVariants, taskFor } from './optimize';
 import { optimizeThorough } from './optimizeThorough';
 import { overlaps, contains } from './geometry';
 import { migrateConfig } from './persistence';
 import type { Config, PanelOption, Placement, Rect, SurfaceTask } from './types';
+import { SYSTEM_VOLTAGE_PRESETS } from './voltage';
 import layout4 from './__fixtures__/solar-layout-4.json';
 import layout11 from './__fixtures__/solar-layout-11.json';
+import layout17 from './__fixtures__/solar-layout-17.json';
+import layout18 from './__fixtures__/solar-layout-18.json';
 
 const panel = (id: string, width: number, height: number, power: number): PanelOption => ({
   id,
@@ -142,6 +145,65 @@ describe('optimizeThorough', () => {
       }
     }
   });
+
+  it('seeds from the layouts it is handed instead of re-running the fast sweep', () => {
+    const config = baseConfig({ panelOptions: [panel('a', 50, 30, 80), panel('b', 60, 40, 120)] });
+    const seedLayouts = optimizeVariants(config, 5);
+    // With no iterations left to run, the result can only be what was handed in — proof
+    // the sweep inside is skipped rather than repeated.
+    const seeded = optimizeThorough(config, { maxIterations: 0, budgetMs: Infinity, seedLayouts });
+    expect(seeded).toEqual(seedLayouts);
+  });
+
+  it('searches on from handed-in seed layouts as well as it does from its own', () => {
+    const config = baseConfig({
+      width: 300,
+      height: 150,
+      keepOuts: [{ id: 'k', x: 110, y: 50, w: 60, h: 50 }],
+      panelOptions: [panel('a', 142, 78, 200), panel('b', 96, 47, 110), panel('c', 60, 60, 80)],
+    });
+    const own = optimizeThorough(config, FIXED)[0].totalPower;
+    const handed = optimizeThorough(config, {
+      ...FIXED,
+      seedLayouts: optimizeVariants(config, 5),
+    })[0].totalPower;
+    expect(handed).toBe(own);
+  });
+
+  it(
+    'reaches the same class of result on both Hängematte positions (layout-17 / layout-18)',
+    { timeout: 120000 },
+    () => {
+      // Two exports of one van that differ only in where the hammock keep-out sits on the
+      // roof. Neither surface is a superset of the other, but the strip layout-18 leaves
+      // free beside its hammock is 37x20 cm — too small for any panel in the catalog — so
+      // every layout that fits on 18's roof also fits on 17's, and the two must land in
+      // the same place. They used to land 25-35 Wp lower and far apart, because the search
+      // barely got any of the shared budget and what it got was spent re-sampling from
+      // scratch rather than improving what it had.
+      const V24 = SYSTEM_VOLTAGE_PRESETS.find((p) => p.system === 24)!.minVoltage;
+      // Deterministic: a fixed iteration count and fixed seeds, so these are exact.
+      for (const [minVoltage, bar] of [
+        [0, 1115],
+        [V24, 1100],
+      ] as const) {
+        for (const fixture of [layout17, layout18]) {
+          const config = migrateConfig(JSON.parse(JSON.stringify(fixture)))!;
+          config.minVoltage = minVoltage;
+          const cfg = taskFor(config, config.surfaces[0]);
+          for (const seed of [1, 12345, 0x5ca1ab1e]) {
+            const best = optimizeThorough(cfg, { maxIterations: 400, budgetMs: Infinity, seed })[0];
+            expect(best.totalPower).toBeGreaterThanOrEqual(bar);
+            expectNoOverlaps(best.placements);
+            for (const p of best.placements) {
+              expect(contains({ x: 0, y: 0, w: cfg.width, h: cfg.height }, bodyRect(p))).toBe(true);
+              for (const k of cfg.keepOuts) expect(overlaps(bodyRect(p), k)).toBe(false);
+            }
+          }
+        }
+      }
+    },
+  );
 
   it('is deterministic for a fixed seed and iteration budget', () => {
     const config = baseConfig({
