@@ -112,6 +112,27 @@ https://ulope.github.io/camper-solar-layout-planner/
 - **Import / Export** — share or back up a configuration as JSON. Files exported by
   earlier single-roof versions still import: the roof becomes the first surface, keeping
   its keep-outs.
+- **PDF export** — the **PDF** button writes the plan as it stands on screen to a report:
+  a title block with the combined Wp, panel count, panel area, weight and price, then
+  every surface drawn to scale (edge margin, keep-outs, and the selected option's panels
+  labeled with model and Wp) under a scale bar, and finally a **table of the modules** —
+  one row per placed model with its size, Wp, quantity, total Wp, weight and price, and a
+  totals row. With more than one surface each also gets its own module table under its
+  drawing, and each caption says which of the computed options is shown. Everything is
+  drawn as vector graphics and real text, so it stays sharp when printed and its figures
+  can be selected and searched; the report follows the UI language and its number and
+  currency formats.
+- **Scan the plan back in** — the report carries a **QR code** that opens the app with the
+  plan restored: the surfaces, their keep-outs, the spacing settings and the panel models
+  the layout actually places. Scanning it from a phone, or opening the link on another
+  machine, brings a printed plan back to something you can edit and re-optimize — hit
+  **Optimize** and the same layout comes back. If the catalog already loaded contains
+  every model the plan uses, it is left exactly as it is, so scanning a plan on the
+  machine it was made on never trades a 40-model catalog for the handful in the picture.
+  The plan travels in the URL's *fragment*, which browsers never send to a server, and the
+  code points back at wherever the app was loaded from, so a self-hosted copy prints codes
+  that return to itself. A plan too large for a scannable code says so on the page instead,
+  and the JSON export remains the way to move a whole catalog.
 
 
 
@@ -225,7 +246,15 @@ currency formatters (`{$fmt.area(cm2)}`); plain modules use the non-reactive `ms
 ## Tech
 
 Svelte 5 + Vite + TypeScript. Canvas rendering. Web Worker for the thorough optimizer.
-`Intl` for locale-aware numbers. No backend, no i18n library.
+`Intl` for locale-aware numbers. jsPDF (with `jspdf-autotable`) for the PDF export and
+`qrcode` for its QR code, both loaded on demand so they stay out of the initial bundle;
+`fflate` to compress a shared plan. No backend, no i18n library.
+
+A shared plan is a positional encoding of the configuration — no ids, no keys — deflated
+and written in base32, which is a subset of the QR *alphanumeric* mode and so about 18%
+denser in the code than base64 would be. On a real 6-surface plan that is some 400
+characters, a symbol that scans comfortably at the printed 45 mm. See
+`src/lib/share/plan.ts`.
 
 
 ## AI Disclaimer

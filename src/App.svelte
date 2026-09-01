@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Toolbar from './components/Toolbar.svelte';
   import SurfacesForm from './components/SurfacesForm.svelte';
   import PanelOptionsList from './components/PanelOptionsList.svelte';
@@ -6,6 +7,23 @@
   import LayoutCanvas from './components/LayoutCanvas.svelte';
   import ResultsSummary from './components/ResultsSummary.svelte';
   import { t } from './lib/i18n';
+  import { PLAN_FRAGMENT_KEY } from './lib/share/fragment';
+
+  // A plan scanned from a report's QR code arrives in the URL fragment. Handled once the
+  // stores are hydrated, so the confirmation can say what it is about to replace. The
+  // decoder is fetched only when there is something to decode — almost every visit has
+  // no plan in its URL and should not pay for one.
+  onMount(() => {
+    const restoreIfPlan = () => {
+      if (!location.hash.includes(`${PLAN_FRAGMENT_KEY}=`)) return;
+      import('./lib/share/restore').then((m) => m.restorePlanFromUrl());
+    };
+    restoreIfPlan();
+    // Opening a plan link while the app is already running changes only the fragment,
+    // which is a same-document navigation and never re-runs any of the above.
+    window.addEventListener('hashchange', restoreIfPlan);
+    return () => window.removeEventListener('hashchange', restoreIfPlan);
+  });
 
   const RW_KEY = 'camper-solar-layout:resultsW:v1';
   const MIN_W = 220;

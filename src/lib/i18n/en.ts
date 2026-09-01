@@ -12,6 +12,8 @@ export const en = {
   // ----- Toolbar -----
   'toolbar.import': 'Import',
   'toolbar.export': 'Export',
+  'toolbar.pdf': 'PDF',
+  'toolbar.pdfTitle': 'Save the current plan as a PDF report',
   'toolbar.reset': 'Reset',
   'toolbar.moreActions': 'More actions',
   'toolbar.importError': 'That file is not a valid layout configuration.',
@@ -191,6 +193,46 @@ export const en = {
   'results.chip': '{name} × {count}',
   'results.flexTag': 'flex',
   'results.flexTitle': 'Flexible panel',
+
+  // ----- PDF report -----
+  'pdf.docTitle': 'Solar layout plan',
+  'pdf.generated': 'Generated {date}',
+  'pdf.totalPower': 'Total power',
+  'pdf.panelsLabel': 'Panels',
+  'pdf.surfacesLabel': 'Surfaces',
+  'pdf.panelArea': 'Panel area',
+  'pdf.settings': 'Edge margin {margin} cm · Panel gap {gap} cm',
+  'pdf.settingsVoltage': ' · Minimum string voltage {volts} V',
+  'pdf.surfaceHeading': '{name} — {width} × {height} cm',
+  'pdf.optionOf': 'option {index} of {count}',
+  'pdf.scaleBar': '{cm} cm',
+  'pdf.modules': 'Modules',
+  'pdf.modulesAll': 'Modules across all surfaces',
+  'pdf.noModules': 'No panels are placed — run the optimizer first.',
+  'pdf.colModel': 'Model',
+  'pdf.colSize': 'Size (cm)',
+  'pdf.colPower': 'Wp',
+  'pdf.colQty': 'Qty',
+  'pdf.colTotalPower': 'Total Wp',
+  'pdf.sizeCell': '{width} × {height}',
+  'pdf.total': 'Total',
+  'pdf.page': 'Page {page} of {count}',
+  'pdf.qrCaption': 'Scan to reopen this plan',
+  'pdf.qrModels': {
+    one: 'Restores the surfaces, keep-outs and the single panel model used here.',
+    other: 'Restores the surfaces, keep-outs and the {count} panel models used here.',
+  },
+  'pdf.qrCatalog': 'Restores the surfaces, keep-outs and the selected panel models.',
+  'pdf.qrTooLarge': 'Too large for a QR code — use Export to save this plan as JSON.',
+
+  // ----- Restoring a scanned plan -----
+  'restore.confirm':
+    'Open the scanned plan?\n\n{surfaces} with {models}.\n\nThis replaces the surfaces and keep-outs you have now.',
+  'restore.modelCount': { one: '{count} panel model', other: '{count} panel models' },
+  'restore.keptCatalog':
+    'Your panel catalog already has every model the plan uses, so it stays as it is.',
+  'restore.replacedCatalog': 'Your panel catalog is replaced by the models the plan uses.',
+  'restore.invalid': 'That link does not contain a valid plan.',
 
   // ----- Canvas -----
   'canvas.unit': 'cm',

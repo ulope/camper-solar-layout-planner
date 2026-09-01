@@ -16,6 +16,8 @@ export const de: Catalog = {
   // ----- Toolbar -----
   'toolbar.import': 'Importieren',
   'toolbar.export': 'Exportieren',
+  'toolbar.pdf': 'PDF',
+  'toolbar.pdfTitle': 'Den aktuellen Plan als PDF-Bericht speichern',
   'toolbar.reset': 'Zurücksetzen',
   'toolbar.moreActions': 'Weitere Aktionen',
   'toolbar.importError': 'Diese Datei ist keine gültige Layout-Konfiguration.',
@@ -205,6 +207,46 @@ export const de: Catalog = {
   'results.chip': '{name} × {count}',
   'results.flexTag': 'flex',
   'results.flexTitle': 'Flexibles Modul',
+
+  // ----- PDF-Bericht -----
+  'pdf.docTitle': 'Solar-Layoutplan',
+  'pdf.generated': 'Erstellt am {date}',
+  'pdf.totalPower': 'Gesamtleistung',
+  'pdf.panelsLabel': 'Module',
+  'pdf.surfacesLabel': 'Flächen',
+  'pdf.panelArea': 'Modulfläche',
+  'pdf.settings': 'Randabstand {margin} cm · Modulabstand {gap} cm',
+  'pdf.settingsVoltage': ' · Mindest-Strangspannung {volts} V',
+  'pdf.surfaceHeading': '{name} — {width} × {height} cm',
+  'pdf.optionOf': 'Option {index} von {count}',
+  'pdf.scaleBar': '{cm} cm',
+  'pdf.modules': 'Module',
+  'pdf.modulesAll': 'Module über alle Flächen',
+  'pdf.noModules': 'Es sind keine Module platziert — zuerst optimieren.',
+  'pdf.colModel': 'Modell',
+  'pdf.colSize': 'Maße (cm)',
+  'pdf.colPower': 'Wp',
+  'pdf.colQty': 'Anz.',
+  'pdf.colTotalPower': 'Wp gesamt',
+  'pdf.sizeCell': '{width} × {height}',
+  'pdf.total': 'Gesamt',
+  'pdf.page': 'Seite {page} von {count}',
+  'pdf.qrCaption': 'Scannen, um diesen Plan zu öffnen',
+  'pdf.qrModels': {
+    one: 'Stellt die Flächen, Sperrzonen und das hier verwendete Modul wieder her.',
+    other: 'Stellt die Flächen, Sperrzonen und die {count} hier verwendeten Module wieder her.',
+  },
+  'pdf.qrCatalog': 'Stellt die Flächen, Sperrzonen und die ausgewählten Module wieder her.',
+  'pdf.qrTooLarge': 'Zu groß für einen QR-Code — den Plan über „Exportieren“ als JSON sichern.',
+
+  // ----- Gescannten Plan wiederherstellen -----
+  'restore.confirm':
+    'Den gescannten Plan öffnen?\n\n{surfaces} mit {models}.\n\nDie aktuellen Flächen und Sperrzonen werden ersetzt.',
+  'restore.modelCount': { one: '{count} Modul', other: '{count} Modulen' },
+  'restore.keptCatalog':
+    'Der vorhandene Modulkatalog enthält bereits alle verwendeten Modelle und bleibt unverändert.',
+  'restore.replacedCatalog': 'Der Modulkatalog wird durch die im Plan verwendeten Module ersetzt.',
+  'restore.invalid': 'Dieser Link enthält keinen gültigen Plan.',
 
   // ----- Canvas -----
   'canvas.unit': 'cm',
