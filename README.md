@@ -115,7 +115,9 @@ https://ulope.github.io/camper-solar-layout-planner/
 - **PDF export** — the **PDF** button writes the plan as it stands on screen to a report:
   a title block with the combined Wp, panel count, panel area, weight and price, then
   every surface drawn to scale (edge margin, keep-outs, and the selected option's panels
-  labeled with model and Wp) under a scale bar, and finally a **table of the modules** —
+  labeled with model and Wp) under a scale bar. Every drawing shares **one** scale, as the
+  canvas does, so two surfaces of the same size come out the same size on paper and a
+  75 cm hatch is never drawn larger than a 4 m roof. Finally a **table of the modules** —
   one row per placed model with its size, Wp, quantity, total Wp, weight and price, and a
   totals row. With more than one surface each also gets its own module table under its
   drawing, and each caption says which of the computed options is shown. Everything is

@@ -79,6 +79,13 @@ const BODY = 9;
 const SMALL = 8;
 const LINE = 12;
 
+/**
+ * Tallest a surface drawing may be. The largest surface is drawn to the text column
+ * unless that would make it taller than this, which keeps a deep surface from taking a
+ * whole page on its own.
+ */
+const MAX_PLAN_H = 330;
+
 /** The printed QR square, quiet zone included — 45 mm. */
 const QR_SIDE = 127.6;
 /** Gap between the header's left column and the QR block. */
@@ -91,6 +98,23 @@ const NAME_LINE_H = 8;
 const POWER_SIZE = 6.5;
 
 type Box = { x: number; y: number; w: number; h: number };
+
+/**
+ * Points per centimeter for every drawing in the report — one scale for all of them.
+ *
+ * Fitting each surface to whatever space its own section had left made the drawings
+ * incomparable: two surfaces of the same size came out at different sizes on the page
+ * depending on where they landed, and a 75 cm hatch could be drawn larger than a 4 m
+ * roof. The canvas draws the whole stack at one scale for the same reason, so the report
+ * does too: the largest surface fills the text column (or the height cap, whichever binds
+ * first) and everything else is drawn against that.
+ */
+export function planScale(surfaces: Surface[], width: number, maxHeight: number): number {
+  const widest = surfaces.reduce((m, s) => Math.max(m, s.width), 0);
+  const tallest = surfaces.reduce((m, s) => Math.max(m, s.height), 0);
+  if (widest <= 0 || tallest <= 0) return 1;
+  return Math.min(width / widest, maxHeight / tallest);
+}
 
 /** Blend two hex colors, `t` being the share of `b`. Used to tint fills for print. */
 export function mixColor(a: string, b: string, t: number): string {
@@ -237,12 +261,17 @@ function sumField(rows: ModuleRow[], field: 'weight' | 'price'): Sum {
 const SCALE_STEPS = [10, 20, 25, 50, 100, 200, 250, 500, 1000];
 
 /**
- * Draw one surface to scale inside `box`, centered, and return the box the drawing
- * actually occupies so the caller can put the scale bar directly under it.
+ * Draw one surface at the report's scale, with its top-left corner at (`ox`, `oy`), and
+ * return the box it occupies so the caller can put the scale bar directly under it.
+ *
+ * Left-aligned rather than centered, like the surfaces on the canvas: sharing an origin
+ * is what lets a reader compare two drawings by eye.
  */
 function drawSurfacePlan(
   flow: Flow,
-  box: Box,
+  ox: number,
+  oy: number,
+  scale: number,
   surface: Surface,
   layout: Layout | null,
   config: Config,
@@ -252,11 +281,8 @@ function drawSurfacePlan(
   fmt: Formatters,
 ): Box {
   const doc = flow.doc;
-  const scale = Math.min(box.w / surface.width, box.h / surface.height);
   const w = surface.width * scale;
   const h = surface.height * scale;
-  const ox = box.x + (box.w - w) / 2;
-  const oy = box.y + (box.h - h) / 2;
   const px = (cm: number) => ox + cm * scale;
   const py = (cm: number) => oy + cm * scale;
 
@@ -409,6 +435,7 @@ function tableHeight(rows: number, foot = false): number {
  * and page breaks are the plugin's job; the cursor is moved to just below the table.
  */
 function table(flow: Flow, options: UserOptions): void {
+  const columnStyles = options.columnStyles ?? {};
   autoTable(flow.doc, {
     theme: 'plain',
     startY: flow.y,
@@ -429,6 +456,18 @@ function table(flow: Flow, options: UserOptions): void {
     },
     footStyles: { fontStyle: 'bold', textColor: INK, lineWidth: { top: 0.5 }, lineColor: RULE },
     ...options,
+    // autoTable applies `columnStyles` to body cells only, so a right-aligned numeric
+    // column had its header and its total sitting to the left of the figures they belong
+    // to. Carry the column's alignment into the other two sections. Placed after the
+    // spread deliberately: this is a correction to the plugin's behaviour rather than a
+    // default a caller should be able to drop.
+    didParseCell: (data) => {
+      if (data.section !== 'body') {
+        const halign = columnStyles[data.column.dataKey]?.halign;
+        if (halign) data.cell.styles.halign = halign;
+      }
+      options.didParseCell?.(data);
+    },
   });
   flow.y = ((flow.doc as TabledDoc).lastAutoTable?.finalY ?? flow.y) + 10;
 }
@@ -503,6 +542,7 @@ export function buildLayoutPdf(input: PdfReportInput): jsPDF {
 
   // ----- One section per surface -----
   const multi = config.surfaces.length > 1;
+  const scale = planScale(config.surfaces, flow.width, MAX_PLAN_H);
   for (const surface of config.surfaces) {
     drawSurfaceSection(flow, surface, selected[surface.id] ?? null, selection[surface.id], {
       config,
@@ -511,6 +551,7 @@ export function buildLayoutPdf(input: PdfReportInput): jsPDF {
       t,
       fmt,
       showTable: multi,
+      scale,
     });
   }
 
@@ -666,21 +707,24 @@ function drawSurfaceSection(
     t: Translate;
     fmt: Formatters;
     showTable: boolean;
+    /** Points per centimeter, shared by every drawing in the report. */
+    scale: number;
   },
 ): void {
-  const { config, colorOf, nameOf, t, fmt } = ctx;
+  const { config, colorOf, nameOf, t, fmt, scale } = ctx;
   const HEADING = 17;
   const STATS = 14;
   const SCALE_ROOM = 20;
-  const MIN_PLAN = 110;
 
   // The per-surface table belongs with the drawing it breaks down, so it is part of the
   // room the section asks for, and the drawing gives way to it rather than the reverse.
   const rows = layout ? moduleRows(config.panelOptions, [layout]) : [];
   const tableRoom = ctx.showTable && rows.length > 0 ? tableHeight(rows.length) : 0;
 
+  const planH = surface.width > 0 && surface.height > 0 ? surface.height * scale : 0;
+
   flow.y += 6;
-  flow.need(HEADING + MIN_PLAN + SCALE_ROOM + STATS + tableRoom);
+  flow.need(HEADING + planH + SCALE_ROOM + STATS + tableRoom);
   flow.line(
     t('pdf.surfaceHeading', {
       name: surface.name,
@@ -690,13 +734,21 @@ function drawSurfaceSection(
     { bold: true, size: 12, gap: HEADING },
   );
 
-  if (surface.width > 0 && surface.height > 0) {
-    const natural = (surface.height / surface.width) * flow.width;
-    const available = flow.room - STATS - SCALE_ROOM - tableRoom;
-    const planH = Math.max(MIN_PLAN, Math.min(natural, available, 330));
-    const box: Box = { x: MARGIN, y: flow.y, w: flow.width, h: planH };
-    const plan = drawSurfacePlan(flow, box, surface, layout, config, colorOf, nameOf, t, fmt);
-    drawScaleBar(flow, plan, plan.w / surface.width, t, fmt);
+  if (planH > 0) {
+    const plan = drawSurfacePlan(
+      flow,
+      MARGIN,
+      flow.y,
+      scale,
+      surface,
+      layout,
+      config,
+      colorOf,
+      nameOf,
+      t,
+      fmt,
+    );
+    drawScaleBar(flow, plan, scale, t, fmt);
     flow.y += planH + SCALE_ROOM;
   }
 
