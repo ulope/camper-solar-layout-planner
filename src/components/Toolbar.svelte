@@ -55,6 +55,9 @@
         selection,
         t: $t,
         fmt: $fmt,
+        // Where this app is served from, so the QR code on the report comes back to the
+        // copy that printed it rather than to a hard-coded address.
+        shareUrlBase: location.origin + location.pathname,
       }).save('solar-layout.pdf');
     } finally {
       exporting = false;

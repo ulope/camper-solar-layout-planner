@@ -231,6 +231,22 @@ export const de: Catalog = {
   'pdf.sizeCell': '{width} × {height}',
   'pdf.total': 'Gesamt',
   'pdf.page': 'Seite {page} von {count}',
+  'pdf.qrCaption': 'Scannen, um diesen Plan zu öffnen',
+  'pdf.qrModels': {
+    one: 'Stellt die Flächen, Sperrzonen und das hier verwendete Modul wieder her.',
+    other: 'Stellt die Flächen, Sperrzonen und die {count} hier verwendeten Module wieder her.',
+  },
+  'pdf.qrCatalog': 'Stellt die Flächen, Sperrzonen und die ausgewählten Module wieder her.',
+  'pdf.qrTooLarge': 'Zu groß für einen QR-Code — den Plan über „Exportieren“ als JSON sichern.',
+
+  // ----- Gescannten Plan wiederherstellen -----
+  'restore.confirm':
+    'Den gescannten Plan öffnen?\n\n{surfaces} mit {models}.\n\nDie aktuellen Flächen und Sperrzonen werden ersetzt.',
+  'restore.modelCount': { one: '{count} Modul', other: '{count} Modulen' },
+  'restore.keptCatalog':
+    'Der vorhandene Modulkatalog enthält bereits alle verwendeten Modelle und bleibt unverändert.',
+  'restore.replacedCatalog': 'Der Modulkatalog wird durch die im Plan verwendeten Module ersetzt.',
+  'restore.invalid': 'Dieser Link enthält keinen gültigen Plan.',
 
   // ----- Canvas -----
   'canvas.unit': 'cm',

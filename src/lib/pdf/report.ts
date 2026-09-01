@@ -25,6 +25,8 @@ import { isPanelFlexible } from '../panels';
 import { wrapText } from '../textwrap';
 import type { Formatters } from '../format';
 import type { MessageKey, MessageParams } from '../i18n';
+import { planToShare, planUrl } from '../share/plan';
+import { drawQr, planQr, type PlanQr } from './qr';
 import { fitText, winAnsi } from './text';
 
 /** The subset of the i18n translator this module needs, so it stays store-free. */
@@ -38,6 +40,13 @@ export type PdfReportInput = {
   selection: Record<string, { index: number; count: number }>;
   t: Translate;
   fmt: Formatters;
+  /**
+   * Where the app this plan came from is served, e.g. `location.origin + pathname`. The
+   * report puts a QR code to it on the first page, so the printed plan can be scanned
+   * back into the app. Omitted — as it is when no page URL is available — no code is
+   * drawn and nothing refers to one.
+   */
+  shareUrlBase?: string;
   /** Injectable so a test gets a reproducible file. */
   date?: Date;
   /**
@@ -69,6 +78,11 @@ const FOOT = 46; // reserved for the footer
 const BODY = 9;
 const SMALL = 8;
 const LINE = 12;
+
+/** The printed QR square, quiet zone included — 45 mm. */
+const QR_SIDE = 127.6;
+/** Gap between the header's left column and the QR block. */
+const QR_GAP = 14;
 
 /** Panel-label metrics, in points; the canvas equivalents are in px. */
 const LABEL_PAD = 3;
@@ -460,6 +474,16 @@ export function buildLayoutPdf(input: PdfReportInput): jsPDF {
     .map((s) => selected[s.id] ?? null)
     .filter((l): l is Layout => l !== null);
 
+  const rows = moduleRows(config.panelOptions, layouts);
+
+  // ----- The plan's own QR code -----
+  // Built before the header is laid out: whether there is a code decides whether the
+  // title block gets the full width or shares it with the square on the right.
+  const shared = input.shareUrlBase ? planToShare(config, layouts) : null;
+  const qr = shared ? planQr(planUrl(input.shareUrlBase as string, shared)) : null;
+  const headerW = qr ? flow.width - QR_SIDE - QR_GAP : flow.width;
+  const headerTop = flow.y;
+
   // ----- Title -----
   flow.line(t('app.title'), { bold: true, size: 17, gap: 22 });
   flow.line(t('pdf.generated', { date: formatDate(date, fmt.locale) }), {
@@ -469,7 +493,13 @@ export function buildLayoutPdf(input: PdfReportInput): jsPDF {
   });
 
   // ----- Summary -----
-  drawSummary(flow, config, layouts, t, fmt);
+  drawSummary(flow, config, layouts, rows, headerW, t, fmt);
+  if (shared && !qr) flow.line(t('pdf.qrTooLarge'), { size: SMALL, color: MUTED, gap: 14 });
+
+  if (qr) {
+    const bottom = drawQrBlock(flow, MARGIN + flow.width - QR_SIDE, headerTop, qr, shared!, rows, t, fmt);
+    flow.y = Math.max(flow.y, bottom);
+  }
 
   // ----- One section per surface -----
   const multi = config.surfaces.length > 1;
@@ -485,7 +515,6 @@ export function buildLayoutPdf(input: PdfReportInput): jsPDF {
   }
 
   // ----- Bill of materials -----
-  const rows = moduleRows(config.panelOptions, layouts);
   flow.need(4 + 17 + (rows.length === 0 ? LINE : tableHeight(rows.length, true)));
   flow.y += 4;
   flow.line(multi ? t('pdf.modulesAll') : t('pdf.modules'), { bold: true, size: 12, gap: 17 });
@@ -507,16 +536,20 @@ function formatDate(date: Date, locale: string): string {
   }
 }
 
-/** The figures block under the title: the totals of everything currently selected. */
+/**
+ * The figures block under the title: the totals of everything currently selected. Drawn
+ * to `width` rather than the full text column, since the QR code shares the header row.
+ */
 function drawSummary(
   flow: Flow,
   config: Config,
   layouts: Layout[],
+  rows: ModuleRow[],
+  width: number,
   t: Translate,
   fmt: Formatters,
 ): void {
   const doc = flow.doc;
-  const rows = moduleRows(config.panelOptions, layouts);
   const weight = sumField(rows, 'weight');
   const price = sumField(rows, 'price');
   const amount = (s: Sum, render: (v: number) => string) =>
@@ -536,15 +569,28 @@ function drawSummary(
   doc.setFillColor(PANEL_BG);
   doc.setDrawColor(RULE);
   doc.setLineWidth(0.5);
-  doc.rect(MARGIN, flow.y, flow.width, boxH, 'FD');
+  doc.rect(MARGIN, flow.y, width, boxH, 'FD');
 
-  const cellW = flow.width / figures.length;
-  figures.forEach(([label, value], i) => {
+  const cellW = width / figures.length;
+
+  // One label size for the whole row, stepped down until the longest fits its cell.
+  // A cell is narrow when the QR code shares the header row, and the labels are single
+  // words in German ("GESAMTLEISTUNG"), so neither wrapping nor truncating them is any
+  // use — a quarter-point of type is invisible where a broken word is not.
+  const labels = figures.map(([label]) => winAnsi(label.toUpperCase()));
+  let labelSize = SMALL - 1.5;
+  while (labelSize > 5 && labels.some((l) => flow.measure(l, labelSize) > cellW - 6)) {
+    labelSize -= 0.25;
+  }
+
+  figures.forEach(([, value], i) => {
     const cx = MARGIN + cellW * i + cellW / 2;
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(SMALL - 1.5);
+    doc.setFontSize(labelSize);
     doc.setTextColor(MUTED);
-    doc.text(winAnsi(label.toUpperCase()), cx, flow.y + 15, { align: 'center' });
+    doc.text(fitText(labels[i], cellW - 4, (x) => flow.measure(x, labelSize)), cx, flow.y + 15, {
+      align: 'center',
+    });
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(INK);
@@ -564,6 +610,47 @@ function drawSummary(
   if (weight.partial || price.partial) {
     flow.line(t('results.partialNote'), { size: SMALL, color: MUTED, gap: 14 });
   }
+}
+
+/**
+ * The QR square and its caption, in the header's right column. Returns the y it ends at,
+ * so the caller can start the first surface below whichever column is taller.
+ */
+function drawQrBlock(
+  flow: Flow,
+  x: number,
+  top: number,
+  qr: PlanQr,
+  shared: Config,
+  rows: ModuleRow[],
+  t: Translate,
+  fmt: Formatters,
+): number {
+  const doc = flow.doc;
+  drawQr(doc, qr, x, top, QR_SIDE);
+
+  let y = top + QR_SIDE + 10;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(INK);
+  doc.text(winAnsi(t('pdf.qrCaption')), x + QR_SIDE / 2, y, { align: 'center' });
+  y += 9;
+
+  // What the code carries: the models of the plan itself, or — with nothing optimized to
+  // take them from — the selected catalog. Saying which is the difference between a
+  // scan that surprises someone and one that does not.
+  const note =
+    rows.length > 0
+      ? t('pdf.qrModels', { count: shared.panelOptions.length })
+      : t('pdf.qrCatalog');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(MUTED);
+  for (const line of wrapText(winAnsi(note), QR_SIDE, (s) => flow.measure(s, 6.5), 3)) {
+    doc.text(line, x + QR_SIDE / 2, y, { align: 'center' });
+    y += 7.5;
+  }
+  return y;
 }
 
 /** Heading, scaled drawing, stats line and — with several surfaces — its own table. */

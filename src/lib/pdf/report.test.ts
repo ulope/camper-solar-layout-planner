@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildLayoutPdf, type PdfReportInput, type Translate } from './report';
+import { decodePlan, planFromFragment, planToShare, planUrl } from '../share/plan';
 import { createFormatters } from '../format';
 import { translate } from '../i18n';
 import type { Config, Layout, PanelOption, Surface } from '../types';
@@ -110,6 +111,56 @@ function drawnText(pdf: string): string[] {
 }
 
 const pageCount = (pdf: string) => Number(/\/Count (\d+)/.exec(pdf)?.[1]);
+
+describe('the plan QR code', () => {
+  const BASE = 'https://example.test/planner/';
+
+  /**
+   * Decode the QR the report drew, by encoding the same plan again — the drawn modules
+   * are pixels, so what is verified here is the payload the report builds from, which is
+   * what a scanner would resolve to.
+   */
+  it('is drawn, with its caption, when a share URL is given', () => {
+    const drawn = drawnText(build({ shareUrlBase: BASE }));
+    expect(drawn).toContain('Scan to reopen this plan');
+    // The note wraps to the width of the square, so it is checked as one run of text.
+    expect(drawn.join(' ')).toContain('the 2 panel models used here');
+  });
+
+  it('is left out entirely when no share URL is given', () => {
+    const drawn = drawnText(build());
+    expect(drawn.some((s) => s.includes('Scan to reopen'))).toBe(false);
+    expect(drawn.some((s) => s.includes('Too large for a QR code'))).toBe(false);
+  });
+
+  it('carries a plan that decodes back to the surfaces and the placed models', () => {
+    // The report shares planToShare(config, selectedLayouts); rebuild that payload and
+    // check it round-trips, since the drawn code itself is only rectangles.
+    const shared = planToShare(CONFIG, [LAYOUTS.s1, LAYOUTS.s2]);
+    const payload = planFromFragment(new URL(planUrl(BASE, shared)).hash);
+    const back = decodePlan(payload!)!;
+    expect(back.surfaces.map((s) => s.name)).toEqual(['Roof', 'Sidewall']);
+    expect(back.surfaces[0].keepOuts.map((k) => k.label)).toEqual(['Roof hatch']);
+    expect(back.panelOptions.map((o) => o.name)).toEqual(['175 W mono', '100 W flex']);
+  });
+
+  it('says so instead of printing a code too dense to scan', () => {
+    // 200 models with unrepeatable names: far past what a scannable symbol holds.
+    const panelOptions = Array.from({ length: 200 }, (_, i) =>
+      panel({ id: `p${i}`, name: `Model ${i} ${Math.random().toString(36).slice(2)}`, power: 100 + i }),
+    );
+    const drawn = drawnText(
+      build({ config: { ...CONFIG, panelOptions }, selected: {}, selection: {}, shareUrlBase: BASE }),
+    );
+    expect(drawn.some((s) => s.includes('Too large for a QR code'))).toBe(true);
+    expect(drawn.some((s) => s.includes('Scan to reopen'))).toBe(false);
+  });
+
+  it('falls back to the selected catalog when nothing is optimized', () => {
+    const drawn = drawnText(build({ selected: {}, selection: {}, shareUrlBase: BASE }));
+    expect(drawn.join(' ')).toContain('the selected panel models');
+  });
+});
 
 describe('buildLayoutPdf', () => {
   it('produces a valid PDF', () => {
