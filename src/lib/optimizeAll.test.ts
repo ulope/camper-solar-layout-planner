@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { optimizeFastAll, optimizeThoroughAll, type MultiProgress } from './optimizeAll';
+import { optimizeFastAll, optimizeThoroughAll, searchWeight, type MultiProgress } from './optimizeAll';
 import { optimize, optimizeVariants, taskFor } from './optimize';
+import { migrateConfig } from './persistence';
 import type { Config, PanelOption, Surface } from './types';
+import layout17 from './__fixtures__/solar-layout-17.json';
 
 const panel = (id: string, width: number, height: number, power: number): PanelOption => ({
   id,
@@ -120,6 +122,45 @@ describe('optimizeThoroughAll', () => {
     optimizeThoroughAll(cfg, { budgetMs: 300, seed: 3 });
     // Two surfaces share one budget rather than taking it each.
     expect(Date.now() - started).toBeLessThan(2000);
+  });
+});
+
+describe('sharing the thorough budget', () => {
+  const van = () => migrateConfig(JSON.parse(JSON.stringify(layout17)))!;
+
+  it('weights a surface by how much there is to search on it', () => {
+    const cfg = config([ROOF, WALL], [panel('a', 20, 20, 20), panel('b', 30, 30, 40)]);
+    // The wall is half again as large as the roof, and both take the same catalog.
+    expect(searchWeight(taskFor(cfg, WALL))).toBeGreaterThan(searchWeight(taskFor(cfg, ROOF)));
+  });
+
+  it('gives no weight to a surface that can hold nothing', () => {
+    const cfg = config([surface('wall', 200, 100, 'flexible')], [panel('rigid', 50, 50, 50)]);
+    expect(searchWeight(taskFor(cfg, cfg.surfaces[0]))).toBe(0);
+  });
+
+  it('gives the van roof more of the budget than every other surface combined', () => {
+    // The roof is the only surface on this van where search time still buys Wp; the side
+    // walls and hatches are exhausted in a few milliseconds. Splitting the budget evenly
+    // spent most of it on surfaces that were already done.
+    const cfg = van();
+    const [roof, ...rest] = cfg.surfaces.map((s) => searchWeight(taskFor(cfg, s)));
+    expect(roof).toBeGreaterThan(rest.reduce((a, b) => a + b, 0));
+  });
+
+  it('runs the fast sweep once per surface, not once per surface per search', { timeout: 60000 }, () => {
+    const cfg = van();
+    optimizeFastAll(cfg, 5); // warm up, so the comparison is not measuring first-run cost
+    const t0 = Date.now();
+    optimizeFastAll(cfg, 5);
+    const sweep = Date.now() - t0;
+    const t1 = Date.now();
+    // No iterations, so all this can spend time on is seeding.
+    optimizeThoroughAll(cfg, { maxIterationsPerSurface: 0, budgetMs: Infinity });
+    const seeding = Date.now() - t1;
+    // Was ~2x when the search re-ran the sweep it had just been given: on this van that
+    // duplicate cost more than the search itself was allowed to spend.
+    expect(seeding).toBeLessThan(sweep * 1.6);
   });
 });
 

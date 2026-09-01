@@ -1,6 +1,7 @@
-import type { Config, Layout, SurfaceResults } from './types';
-import { optimizeVariants, taskFor } from './optimize';
+import type { Config, Layout, SurfaceResults, SurfaceTask } from './types';
+import { optimizeVariants, taskFor, usableArea } from './optimize';
 import { optimizeThorough } from './optimizeThorough';
+import { packablePanels } from './panels';
 import type { RankOptions } from './ranking';
 
 export type MultiProgress = {
@@ -36,6 +37,40 @@ function combinedBest(results: SurfaceResults): number {
 }
 
 /**
+ * How much a thorough search has to explore on one surface, used to split a shared
+ * time budget between surfaces rather than handing every surface the same slice.
+ *
+ * The estimate is `models × capacity²`: `capacity` is how many of the smallest allowed
+ * panel would fit in the usable area, and the number of *arrangements* to sift through
+ * grows far faster than the number of panels does. A 75×55 cm hatch that takes two
+ * panels from one catalog is exhausted in a few milliseconds; a 4×1.65 m roof with a
+ * keep-out and thirty models is not, and is where every extra millisecond turns into Wp.
+ */
+export function searchWeight(task: SurfaceTask): number {
+  const models = packablePanels(task.panelOptions);
+  if (models.length === 0) return 0;
+  const gap = task.panelGap;
+  const smallest = Math.min(...models.map((o) => (o.width + gap) * (o.height + gap)));
+  if (!(smallest > 0)) return 0;
+  const capacity = Math.max(1, Math.floor(usableArea(task) / smallest));
+  return models.length * capacity * capacity;
+}
+
+/**
+ * Split the weights so no surface can be starved: a converged surface only needs a few
+ * milliseconds, but a surface that gets *none* keeps whatever the fast sweep found, which
+ * on some surfaces is a genuine step below what a moment of search reaches. An eighth of
+ * an equal share is far more than any of the quick surfaces measured needs.
+ */
+function budgetWeights(tasks: SurfaceTask[]): number[] {
+  const raw = tasks.map(searchWeight);
+  const total = raw.reduce((a, b) => a + b, 0);
+  if (total <= 0) return raw.map(() => 1);
+  const floor = total / (8 * tasks.length);
+  return raw.map((w) => Math.max(w, floor));
+}
+
+/**
  * Fast sweep across every surface.
  *
  * Surfaces are packed independently: no placement constraint crosses a surface boundary,
@@ -58,8 +93,14 @@ export function optimizeFastAll(config: Config, max = 5, rank?: RankOptions): Su
  *
  * Runs the fast sweep for *all* surfaces up front so an early cancel still leaves a
  * result on every surface rather than only the ones already reached, then searches each
- * surface in turn. Each gets an equal share of whatever time is left, so a surface that
- * finishes early (iteration cap, nothing to place) donates its remainder to the rest.
+ * surface in turn — handing that same sweep to each search rather than making it repeat
+ * the most expensive step it has.
+ *
+ * Whatever time is left is split by {@link searchWeight}, not evenly: the surfaces differ
+ * enormously in how much there is to search, and an even split spends most of the budget
+ * on surfaces that were already done while the one surface that could still improve runs
+ * out of time. A surface that finishes early (iteration cap, nothing to place) donates its
+ * remainder to the rest, since each share is recomputed from the time actually left.
  */
 export function optimizeThoroughAll(config: Config, opts: ThoroughAllOpts = {}): SurfaceResults {
   const {
@@ -74,6 +115,7 @@ export function optimizeThoroughAll(config: Config, opts: ThoroughAllOpts = {}):
 
   const start = now();
   const surfaces = config.surfaces;
+  const tasks = surfaces.map((s) => taskFor(config, s));
   const resultsBySurface: SurfaceResults = {};
 
   const emit = (surfaceIndex: number) =>
@@ -87,20 +129,28 @@ export function optimizeThoroughAll(config: Config, opts: ThoroughAllOpts = {}):
     });
 
   // Seed pass: every surface has a usable result before the deep search begins.
-  for (const surface of surfaces) {
-    resultsBySurface[surface.id] = optimizeVariants(taskFor(config, surface), maxResults, rank);
-  }
+  const seeded: Layout[][] = tasks.map((task) => optimizeVariants(task, maxResults, rank));
+  surfaces.forEach((surface, i) => void (resultsBySurface[surface.id] = seeded[i]));
   emit(0);
 
+  const weights = budgetWeights(tasks);
+  let remainingWeight = weights.reduce((a, b) => a + b, 0);
   const deadline = start + budgetMs;
   for (let i = 0; i < surfaces.length; i++) {
     if (shouldStop?.()) break;
     const surface = surfaces[i];
     const remaining = deadline - now();
     if (remaining <= 0) break;
+    // This surface's share of the time actually left, so a surface that stops early
+    // hands the rest of its slice to the surfaces still to come.
+    const share = remainingWeight > 0 ? (remaining * weights[i]) / remainingWeight : remaining;
+    remainingWeight -= weights[i];
 
-    resultsBySurface[surface.id] = optimizeThorough(taskFor(config, surface), {
-      budgetMs: remaining / (surfaces.length - i),
+    resultsBySurface[surface.id] = optimizeThorough(tasks[i], {
+      budgetMs: share,
+      // The sweep above already produced this surface's fast layouts; re-running it
+      // inside the search would cost more than the search itself gets to spend.
+      seedLayouts: seeded[i],
       maxIterations: maxIterationsPerSurface,
       // Decorrelate the surfaces so they don't all walk the same random trajectory.
       seed: (seed ^ Math.imul(i + 1, 0x9e3779b9)) >>> 0,
