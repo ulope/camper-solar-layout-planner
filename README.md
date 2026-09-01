@@ -112,6 +112,16 @@ https://ulope.github.io/camper-solar-layout-planner/
 - **Import / Export** — share or back up a configuration as JSON. Files exported by
   earlier single-roof versions still import: the roof becomes the first surface, keeping
   its keep-outs.
+- **PDF export** — the **PDF** button writes the plan as it stands on screen to a report:
+  a title block with the combined Wp, panel count, panel area, weight and price, then
+  every surface drawn to scale (edge margin, keep-outs, and the selected option's panels
+  labeled with model and Wp) under a scale bar, and finally a **table of the modules** —
+  one row per placed model with its size, Wp, quantity, total Wp, weight and price, and a
+  totals row. With more than one surface each also gets its own module table under its
+  drawing, and each caption says which of the computed options is shown. Everything is
+  drawn as vector graphics and real text, so it stays sharp when printed and its figures
+  can be selected and searched; the report follows the UI language and its number and
+  currency formats.
 
 
 
@@ -225,7 +235,8 @@ currency formatters (`{$fmt.area(cm2)}`); plain modules use the non-reactive `ms
 ## Tech
 
 Svelte 5 + Vite + TypeScript. Canvas rendering. Web Worker for the thorough optimizer.
-`Intl` for locale-aware numbers. No backend, no i18n library.
+`Intl` for locale-aware numbers. jsPDF (with `jspdf-autotable`) for the PDF export, loaded
+on demand so it stays out of the initial bundle. No backend, no i18n library.
 
 
 ## AI Disclaimer

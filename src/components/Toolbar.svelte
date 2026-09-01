@@ -1,9 +1,16 @@
 <script lang="ts">
-  import { config, setConfig, clearLayouts } from '../lib/stores';
+  import {
+    config,
+    setConfig,
+    clearLayouts,
+    layoutsBySurface,
+    selectedBySurface,
+    selectedLayouts,
+  } from '../lib/stores';
   import { defaultConfig, exportConfig, importConfig } from '../lib/persistence';
   import OptimizeButton from './OptimizeButton.svelte';
   import Popover from './Popover.svelte';
-  import { LOCALES, locale, localeInfo, setLocale, t, type Locale } from '../lib/i18n';
+  import { fmt, LOCALES, locale, localeInfo, setLocale, t, type Locale } from '../lib/i18n';
 
   let fileInput: HTMLInputElement;
   let menuOpen = $state(false);
@@ -19,6 +26,39 @@
     a.download = 'solar-layout.json';
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  /**
+   * The PDF report of what is currently on screen: each surface's selected option drawn
+   * to scale, plus the bill of materials. Which alternative that is travels with it, so
+   * a printed plan says which of the computed options it shows.
+   *
+   * The report module is imported on demand: it pulls in jsPDF, which is larger than the
+   * rest of the app put together and is of no use until someone asks for a PDF.
+   */
+  let exporting = $state(false);
+
+  async function doExportPdf() {
+    if (exporting) return;
+    exporting = true;
+    try {
+      const { buildLayoutPdf } = await import('../lib/pdf/report');
+      const selection = Object.fromEntries(
+        $config.surfaces.map((s) => [
+          s.id,
+          { index: $selectedBySurface[s.id] ?? 0, count: ($layoutsBySurface[s.id] ?? []).length },
+        ]),
+      );
+      buildLayoutPdf({
+        config: $config,
+        selected: $selectedLayouts,
+        selection,
+        t: $t,
+        fmt: $fmt,
+      }).save('solar-layout.pdf');
+    } finally {
+      exporting = false;
+    }
   }
 
   async function onFile(e: Event) {
@@ -86,6 +126,12 @@
     <div class="file-actions">
       <button class="ghost" onclick={pickFile}>{$t('toolbar.import')}</button>
       <button class="ghost" onclick={doExport}>{$t('toolbar.export')}</button>
+      <button
+        class="ghost"
+        onclick={doExportPdf}
+        disabled={exporting}
+        title={$t('toolbar.pdfTitle')}>{$t('toolbar.pdf')}</button
+      >
       <button class="ghost" onclick={reset}>{$t('toolbar.reset')}</button>
     </div>
     <div class="lang-picker">
@@ -137,6 +183,7 @@
         <div class="menu">
           <button class="ghost item" onclick={() => fromMenu(pickFile)}>{$t('toolbar.import')}</button>
           <button class="ghost item" onclick={() => fromMenu(doExport)}>{$t('toolbar.export')}</button>
+          <button class="ghost item" onclick={() => fromMenu(doExportPdf)}>{$t('toolbar.pdf')}</button>
           <button class="ghost item" onclick={() => fromMenu(reset)}>{$t('toolbar.reset')}</button>
           <div class="section" role="group" aria-labelledby="lang-heading">
             <p class="group" id="lang-heading">{$t('toolbar.language')}</p>
