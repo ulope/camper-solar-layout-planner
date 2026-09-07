@@ -160,6 +160,8 @@ export const de: Catalog = {
     'Ein {system}-V-Speicher lädt bis auf etwa {chargeEnd} V, pro Strang wird mit {min} V geplant – 95 % der Maximalspannung, plus 1 V.',
   'optimizer.voltageNote':
     'Ein Modul unter {min} V wird nur platziert, wenn genügend davon auf dieselbe Fläche passen, so dass eine Reihenschaltung hergestellt werden kann.',
+  'optimizer.voltageDistributeNote':
+    'Ein solches Modul wird zudem nur in einer Anzahl platziert, die sich in gleich lange Stränge aufteilen lässt – eine Primzahl über 3 ergäbe einen einzigen langen Strang an einem Laderegler, daher wird das überzählige Modul weggelassen.',
   'optimizer.restrictedHead': 'Nur nutzbar in Strängen von:',
   'optimizer.restrictedNeed': '{count} × {voltage} V',
   'optimizer.voltageGap': {

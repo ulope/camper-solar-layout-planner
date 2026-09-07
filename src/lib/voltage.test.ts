@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   SYSTEM_VOLTAGE_PRESETS,
+  admissibleCount,
+  distributable,
   enforceMinVoltage,
+  isPrime,
   minVoltageFilter,
   panelVoltage,
   restrictedPanels,
@@ -105,6 +108,69 @@ describe('restrictedPanels / unrestrictedPanels', () => {
   });
 });
 
+describe('isPrime', () => {
+  it.each([
+    [0, false],
+    [1, false],
+    [2, true],
+    [3, true],
+    [4, false],
+    [9, false],
+    [25, false],
+    [97, true],
+    [2.5, false],
+    [-7, false],
+  ])('judges %i', (n, expected) => {
+    expect(isPrime(n)).toBe(expected);
+  });
+});
+
+describe('distributable', () => {
+  it('allows the minimal strings a threshold itself asks for', () => {
+    expect([1, 2, 3].map(distributable)).toEqual([true, true, true]);
+  });
+
+  it('rejects a prime count above 3, which can only be wired as one string', () => {
+    expect([5, 7, 11, 13, 17].map(distributable)).toEqual([false, false, false, false, false]);
+  });
+
+  it('allows every count that splits into equal strings', () => {
+    expect([4, 6, 8, 9, 10, 12, 14, 15].every(distributable)).toBe(true);
+  });
+});
+
+describe('admissibleCount', () => {
+  it('keeps a count that is already distributable', () => {
+    expect(admissibleCount(4, 2)).toBe(4);
+    expect(admissibleCount(6, 3)).toBe(6);
+  });
+
+  it('gives one panel back from a prime count above 3', () => {
+    expect(admissibleCount(5, 2)).toBe(4);
+    expect(admissibleCount(7, 2)).toBe(6);
+    expect(admissibleCount(13, 4)).toBe(12);
+  });
+
+  it('keeps the minimal strings 2 and 3', () => {
+    expect(admissibleCount(2, 2)).toBe(2);
+    expect(admissibleCount(3, 3)).toBe(3);
+    expect(admissibleCount(3, 2)).toBe(3);
+  });
+
+  it('yields nothing when fewer than one string was placed', () => {
+    expect(admissibleCount(1, 2)).toBe(0);
+    expect(admissibleCount(0, 2)).toBe(0);
+  });
+
+  it('yields nothing when the string length itself is a prime above 3', () => {
+    // 5 in series is the only way to reach the threshold, and 5 cannot be distributed.
+    expect(admissibleCount(5, 5)).toBe(0);
+    expect(admissibleCount(7, 7)).toBe(0);
+    // One more panel and the count is composite again.
+    expect(admissibleCount(6, 5)).toBe(6);
+  });
+});
+
 describe('enforceMinVoltage', () => {
   it('drops a lone panel that cannot reach the threshold', () => {
     expect(enforceMinVoltage(placements('low', 1), catalog, 24)).toEqual([]);
@@ -132,6 +198,41 @@ describe('enforceMinVoltage', () => {
     const mixed = [...placements('low', 1), ...placements('mid', 1)];
     expect(enforceMinVoltage(mixed, catalog, 0)).toEqual(mixed);
   });
+
+  it('gives a panel back from a prime count that cannot be split across chargers', () => {
+    const five = placements('low', 5);
+    const kept = enforceMinVoltage(five, catalog, 24);
+    expect(kept).toHaveLength(4);
+    // The panels kept are the first the packer placed.
+    expect(kept).toEqual(five.slice(0, 4));
+  });
+
+  it('drops the whole model when the only string length is a prime above 3', () => {
+    // 12 V panels on a 60 V threshold: 5 in series, and 5 cannot be distributed.
+    expect(enforceMinVoltage(placements('low', 5), catalog, 60)).toEqual([]);
+    expect(enforceMinVoltage(placements('low', 6), catalog, 60)).toHaveLength(6);
+  });
+
+  it('leaves the minimal strings of 2 and 3 alone', () => {
+    expect(enforceMinVoltage(placements('low', 2), catalog, 24)).toHaveLength(2);
+    expect(enforceMinVoltage(placements('low', 3), catalog, 24)).toHaveLength(3);
+  });
+
+  it('does not constrain a model that clears the threshold on its own', () => {
+    // 'mid' needs no partner at 24 V, so any number of them wires one per tracker.
+    const five = placements('mid', 5);
+    expect(enforceMinVoltage(five, catalog, 24)).toEqual(five);
+    const unknownFive = placements('unknown', 7);
+    expect(enforceMinVoltage(unknownFive, catalog, 24)).toEqual(unknownFive);
+  });
+
+  it('trims each restricted model on its own count', () => {
+    const mixed = [...placements('low', 5), ...placements('mid', 7)];
+    const kept = enforceMinVoltage(mixed, catalog, 24);
+    const counts = (id: string) => kept.filter((p) => p.optionId === id).length;
+    expect(counts('low')).toBe(4);
+    expect(counts('mid')).toBe(7);
+  });
 });
 
 describe('satisfiesMinVoltage', () => {
@@ -142,6 +243,11 @@ describe('satisfiesMinVoltage', () => {
 
   it('accepts the empty layout', () => {
     expect(satisfiesMinVoltage([], catalog, 48)).toBe(true);
+  });
+
+  it('rejects a count that cannot be distributed onto chargers', () => {
+    expect(satisfiesMinVoltage(placements('low', 5), catalog, 24)).toBe(false);
+    expect(satisfiesMinVoltage(placements('low', 4), catalog, 24)).toBe(true);
   });
 });
 
