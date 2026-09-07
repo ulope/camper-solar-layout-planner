@@ -3,13 +3,13 @@
   import {
     config,
     selectedLayouts,
+    panelColors,
     layoutStale,
     activeSurfaceId,
     selectedKeepOut,
     addKeepOut,
     updateKeepOut,
   } from '../lib/stores';
-  import { panelColor } from '../lib/colors';
   import { snap } from '../lib/geometry';
   import { surfaceColumn, columnExtent, surfaceAtPoint, type PlacedSurface } from '../lib/surfaces';
   import {
@@ -22,6 +22,7 @@
     MAX_ZOOM,
     type Viewport,
   } from '../lib/view';
+  import { panelColor } from '../lib/colors';
   import { wrapText } from '../lib/textwrap';
   import { fmt, t } from '../lib/i18n';
   import type { Rect } from '../lib/types';
@@ -206,8 +207,7 @@
   };
 
   function colorForOption(optionId: string): string {
-    const idx = $config.panelOptions.findIndex((o) => o.id === optionId);
-    return panelColor(idx < 0 ? 0 : idx);
+    return $panelColors.get(optionId) ?? panelColor(0);
   }
 
   function nameForOption(optionId: string): string {
@@ -723,6 +723,7 @@
     void [
       $config,
       $selectedLayouts,
+      $panelColors,
       $selectedKeepOut,
       $activeSurfaceId,
       $t,

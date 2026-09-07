@@ -4,6 +4,7 @@ import { loadConfig, saveConfig } from './persistence';
 import { optimizeFastAll, optimizeThoroughAll } from './optimizeAll';
 import { ALL_CRITERIA, DEFAULT_RANK, type RankOptions, type SecondaryCriterion } from './ranking';
 import { isPanelEnabled } from './panels';
+import { assignPanelColors } from './colors';
 import { panelVoltage, restrictedPanels } from './voltage';
 import { msg } from './i18n';
 
@@ -68,6 +69,22 @@ export const selectedLayouts = derived(
     return out;
   },
 );
+
+/**
+ * The color each panel model is drawn in, everywhere. Derived from every computed option
+ * of every surface rather than from the one on screen, so a model keeps its color as the
+ * alternatives are clicked through, and no single option can come out all one color.
+ */
+export const panelColors = derived([config, layoutsBySurface], ([$config, $results]) => {
+  const groups: string[][] = [];
+  for (const layouts of Object.values($results)) {
+    for (const l of layouts) groups.push([...new Set(l.placements.map((p) => p.optionId))]);
+  }
+  return assignPanelColors(
+    $config.panelOptions.map((o) => o.id),
+    groups,
+  );
+});
 
 /** The surface the forms currently edit; falls back to the first one. */
 export const activeSurface = derived(
