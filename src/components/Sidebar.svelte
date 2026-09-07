@@ -3,12 +3,12 @@
   import { planInputStats, planResultStats } from '../lib/summary';
   import {
     sidebarPrefs,
-    toggleSidebar,
     setSidebarWidth,
     revealSection,
     type SectionId,
   } from '../lib/uiPrefs';
   import { fmt, t, type MessageKey } from '../lib/i18n';
+  import SectionIcon from './SectionIcon.svelte';
   import SidebarSection from './SidebarSection.svelte';
   import SurfaceList from './SurfaceList.svelte';
   import PanelOptionsList from './PanelOptionsList.svelte';
@@ -24,11 +24,11 @@
 
   const collapsed = $derived($sidebarPrefs.collapsed);
 
-  const RAIL: { id: SectionId; icon: string; label: MessageKey }[] = [
-    { id: 'overview', icon: '∑', label: 'overview.title' },
-    { id: 'surfaces', icon: '▭', label: 'surfaces.title' },
-    { id: 'panels', icon: '▤', label: 'panels.title' },
-    { id: 'spacing', icon: '⇔', label: 'spacing.title' },
+  const RAIL: { id: SectionId; label: MessageKey }[] = [
+    { id: 'overview', label: 'overview.title' },
+    { id: 'surfaces', label: 'surfaces.title' },
+    { id: 'panels', label: 'panels.title' },
+    { id: 'spacing', label: 'spacing.title' },
   ];
 
   const badges = $derived<Partial<Record<SectionId, string>>>({
@@ -45,16 +45,9 @@
   }
 </script>
 
-<aside class="sidebar" class:collapsed aria-label={$t('sidebar.label')}>
+<aside id="sidebar" class="sidebar" class:collapsed aria-label={$t('sidebar.label')}>
   {#if collapsed}
     <div class="rail">
-      <button
-        class="ghost icon"
-        aria-label={$t('sidebar.expand')}
-        title={$t('sidebar.expand')}
-        aria-expanded="false"
-        onclick={toggleSidebar}>»</button
-      >
       {#each RAIL as r (r.id)}
         <button
           class="ghost icon"
@@ -62,49 +55,39 @@
           title={$t(r.label)}
           onclick={() => reveal(r.id)}
         >
-          <span aria-hidden="true">{r.icon}</span>
+          <SectionIcon id={r.id} />
           {#if badges[r.id]}<span class="rbadge" aria-hidden="true">{badges[r.id]}</span>{/if}
         </button>
       {/each}
     </div>
   {:else}
-    <div class="head">
-      <button
-        class="ghost icon"
-        aria-label={$t('sidebar.collapse')}
-        title={$t('sidebar.collapse')}
-        aria-expanded="true"
-        onclick={toggleSidebar}>«</button
-      >
-    </div>
-
     <SidebarSection id="overview" title={$t('overview.title')}>
-      <p class="stat">
-        {$t('overview.inputs', {
-          surfaces: $t('results.surfaceCount', { count: inputs.surfaceCount }),
-          area: $fmt.area(inputs.totalArea),
-        })}
-      </p>
-      <p class="stat">
-        {$t('overview.catalog', {
-          keepOuts: $t('keepOuts.count', { count: inputs.keepOutCount }),
-          models: $t('overview.models', {
-            enabled: inputs.panelModelsEnabled,
-            count: inputs.panelModels,
-          }),
-        })}
-      </p>
       {#if result}
+        {@const pct = Math.round(result.coverage * 100)}
         <div class="result" class:stale={$layoutStale}>
           <p class="power">
-            {$fmt.num(result.totalPower, 0)} <span class="wp">Wp</span>
+            <span class="pvalue">{$fmt.num(result.totalPower, 0)}</span>
+            <span class="wp">Wp</span>
           </p>
           <p class="rmeta">
             {$t('overview.resultMeta', {
               panels: $t('results.panelCount', { count: result.panelCount }),
-              coverage: $fmt.num(result.coverage * 100, 0),
+              surfaces: $t('results.surfaceCount', { count: inputs.surfaceCount }),
             })}
           </p>
+          <div class="meter" title={$t('overview.coverageLabel')}>
+            <div
+              class="track"
+              role="meter"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={pct}
+              aria-label={$t('overview.coverageLabel')}
+            >
+              <div class="fill" style="width: {Math.min(100, pct)}%"></div>
+            </div>
+            <span class="mlabel">{$t('overview.coverage', { coverage: $fmt.num(pct, 0) })}</span>
+          </div>
           {#if $layoutStale}
             <p class="stale-note">{$t('canvas.stale')}</p>
           {/if}
@@ -112,6 +95,36 @@
       {:else}
         <p class="empty">{$t('results.notOptimized')}</p>
       {/if}
+
+      <dl class="tiles">
+        <div class="tile">
+          <dt>{$t('overview.surfacesLabel')}</dt>
+          <dd>{$fmt.num(inputs.surfaceCount, 0)}</dd>
+        </div>
+        <div class="tile">
+          <dt>{$t('overview.areaLabel')}</dt>
+          <dd>{$fmt.area(inputs.totalArea)}</dd>
+        </div>
+        <div class="tile">
+          <dt>{$t('overview.keepOutsLabel')}</dt>
+          <dd>{$fmt.num(inputs.keepOutCount, 0)}</dd>
+        </div>
+        <div
+          class="tile"
+          title={$t('overview.modelsTitle', {
+            enabled: inputs.panelModelsEnabled,
+            count: inputs.panelModels,
+          })}
+        >
+          <dt>{$t('overview.modelsLabel')}</dt>
+          <dd>
+            {$t('overview.modelsValue', {
+              enabled: $fmt.num(inputs.panelModelsEnabled, 0),
+              count: $fmt.num(inputs.panelModels, 0),
+            })}
+          </dd>
+        </div>
+      </dl>
     </SidebarSection>
 
     <SidebarSection
@@ -157,14 +170,6 @@
     padding: 8px 4px;
     overflow: hidden;
   }
-  .head {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 2px;
-  }
-  .head .icon {
-    padding: 2px 7px;
-  }
   .rail {
     display: flex;
     flex-direction: column;
@@ -185,57 +190,109 @@
   }
   .rail .icon {
     width: 100%;
-    font-size: 16px;
     padding: 7px 4px;
   }
   .rbadge {
     font-size: 9px;
     font-variant-numeric: tabular-nums;
   }
-  .stat {
-    margin: 0 0 4px;
-    font-size: 12px;
-    color: var(--text-dim);
-    font-variant-numeric: tabular-nums;
-  }
-  .result {
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--border);
-  }
   /* The figures still describe the layout on screen, but the inputs have moved on. */
   .result.stale .power,
-  .result.stale .rmeta {
-    opacity: 0.6;
+  .result.stale .rmeta,
+  .result.stale .meter {
+    opacity: 0.55;
   }
   .power {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
     margin: 0;
-    font-size: 20px;
+  }
+  .pvalue {
+    font-size: 27px;
     font-weight: 600;
+    line-height: 1.05;
     color: var(--accent);
-    font-variant-numeric: tabular-nums;
+    /* Proportional: this is a headline figure, not a column of them. */
+    font-variant-numeric: normal;
   }
   .wp {
     font-size: 12px;
-    font-weight: 400;
     color: var(--text-dim);
   }
   .rmeta {
-    margin: 2px 0 0;
+    margin: 3px 0 0;
     font-size: 12px;
+    color: var(--text-dim);
+  }
+  /* Coverage against the usable area: one ratio against a limit, so a meter rather
+     than a chart. The track is the fill's own hue at low alpha, so the whole bar reads
+     as one scale instead of a fill sitting on unrelated gray. */
+  .meter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 9px;
+  }
+  .track {
+    flex: 1;
+    min-width: 0;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(74, 158, 255, 0.18);
+    overflow: hidden;
+  }
+  .fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--accent-2);
+    transition: width 0.2s ease;
+  }
+  .mlabel {
+    flex: none;
+    font-size: 11px;
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
   }
   .stale-note {
-    margin: 6px 0 0;
+    margin: 8px 0 0;
     font-size: 11px;
     color: var(--accent);
   }
   .empty {
-    margin: 8px 0 0;
+    margin: 0;
     color: var(--text-dim);
     font-size: 12px;
     font-style: italic;
+  }
+  /* What the plan is made of. Two columns so the four figures stay readable even at the
+     narrowest sidebar width. */
+  .tiles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    margin: 12px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .tile {
+    min-width: 0;
+    padding: 5px 8px 5px 0;
+  }
+  .tiles dt {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tiles dd {
+    margin: 1px 0 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
   }
 
   /* Single-column layout: the sidebar spans the full width, so there is nothing to

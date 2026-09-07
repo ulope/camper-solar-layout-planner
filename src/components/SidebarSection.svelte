@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { sidebarPrefs, toggleSection, type SectionId } from '../lib/uiPrefs';
+  import Chevron from './Chevron.svelte';
 
   // One collapsible card in the sidebar. Owns the card chrome every sidebar panel used to
   // repeat, and reads its own open state from the persisted prefs so a reload comes back
@@ -32,7 +33,7 @@
       aria-controls={bodyId}
       onclick={() => toggleSection(id)}
     >
-      <span class="caret" class:open aria-hidden="true">▸</span>
+      <Chevron {open} />
       <h2>{title}</h2>
       {#if badge}<span class="badge">{badge}</span>{/if}
     </button>
@@ -60,10 +61,10 @@
   .disclose {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
     flex: 1;
     min-width: 0;
-    padding: 4px 4px 4px 2px;
+    padding: 5px 6px 5px 4px;
     border: none;
     border-radius: 6px;
     text-align: left;
@@ -71,17 +72,9 @@
   .disclose:hover {
     background: var(--panel-bg-2);
   }
-  .caret {
-    flex: none;
-    color: var(--text-dim);
-    font-size: 10px;
-    transition: transform 0.12s;
-  }
-  .caret.open {
-    transform: rotate(90deg);
-  }
   h2 {
     font-size: 13px;
+    letter-spacing: 0.01em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

@@ -199,13 +199,15 @@ export const de: Catalog = {
 
   // ----- Overview -----
   'overview.title': 'Überblick',
-  'overview.inputs': '{surfaces} · {area}',
-  'overview.catalog': '{keepOuts} · {models}',
-  'overview.models': {
-    one: '{enabled} von {count} Modell',
-    other: '{enabled} von {count} Modellen',
-  },
-  'overview.resultMeta': '{panels} · {coverage} % Abdeckung',
+  'overview.surfacesLabel': 'Flächen',
+  'overview.areaLabel': 'Flächeninhalt',
+  'overview.keepOutsLabel': 'Sperrflächen',
+  'overview.modelsLabel': 'Modelle',
+  'overview.modelsValue': '{enabled} / {count}',
+  'overview.modelsTitle': '{enabled} von {count} Modulmodellen sind ausgewählt',
+  'overview.resultMeta': '{panels} · {surfaces}',
+  'overview.coverage': '{coverage} % Abdeckung',
+  'overview.coverageLabel': 'Modulfläche im Verhältnis zur nutzbaren Fläche',
 
   // ----- Results -----
   'results.title': 'Ergebnisse',

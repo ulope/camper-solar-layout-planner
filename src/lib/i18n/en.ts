@@ -190,13 +190,15 @@ export const en = {
 
   // ----- Overview -----
   'overview.title': 'Overview',
-  'overview.inputs': '{surfaces} · {area}',
-  'overview.catalog': '{keepOuts} · {models}',
-  'overview.models': {
-    one: '{enabled} of {count} model',
-    other: '{enabled} of {count} models',
-  },
-  'overview.resultMeta': '{panels} · {coverage}% coverage',
+  'overview.surfacesLabel': 'Surfaces',
+  'overview.areaLabel': 'Surface area',
+  'overview.keepOutsLabel': 'Keep-outs',
+  'overview.modelsLabel': 'Models',
+  'overview.modelsValue': '{enabled} / {count}',
+  'overview.modelsTitle': '{enabled} of {count} panel models are selected',
+  'overview.resultMeta': '{panels} · {surfaces}',
+  'overview.coverage': '{coverage}% coverage',
+  'overview.coverageLabel': 'Panel area as a share of the usable surface area',
 
   // ----- Results -----
   'results.title': 'Results',
