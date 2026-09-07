@@ -11,6 +11,7 @@
   import { panelColor } from '../lib/colors';
   import { isPanelFlexible } from '../lib/panels';
   import { CRITERION_PHRASE_KEYS, layoutFieldStat, optionsById, type FieldStat } from '../lib/ranking';
+  import { planResultStats } from '../lib/summary';
   import { fmt, t, tHtml } from '../lib/i18n';
   import type { Layout } from '../lib/types';
 
@@ -60,11 +61,15 @@
     $config.surfaces.map((s) => $selectedLayouts[s.id]).filter((l): l is Layout => l !== null),
   );
 
-  const combined = $derived({
-    totalPower: chosen.reduce((s, l) => s + l.totalPower, 0),
-    panelCount: chosen.reduce((s, l) => s + l.panelCount, 0),
-    usedArea: chosen.reduce((s, l) => s + l.usedArea, 0),
-  });
+  // Shared with the sidebar overview, so the two panels cannot report different totals.
+  const combined = $derived(
+    planResultStats($config.surfaces, $selectedLayouts) ?? {
+      totalPower: 0,
+      panelCount: 0,
+      usedArea: 0,
+      coverage: 0,
+    },
+  );
 
   /**
    * Weight / price summed across surfaces. Data-completeness counts are summed too, so a
