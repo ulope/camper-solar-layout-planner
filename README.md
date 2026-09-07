@@ -109,9 +109,14 @@ https://ulope.github.io/camper-solar-layout-planner/
   session starts from is created in it. Names you type — surfaces, keep-outs, panel
   models — are your data and are never rewritten by a language switch.
 - **Autosave** — the full configuration is saved to the Browser's `localStorage` and restored on reload.
-- **Import / Export** — share or back up a configuration as JSON. Files exported by
-  earlier single-roof versions still import: the roof becomes the first surface, keeping
-  its keep-outs.
+- **Import / Export** — share or back up a configuration as JSON. When something has been
+  optimized, the layout shown for each surface travels in the file too, so importing it
+  brings the plan back on screen rather than just the inputs it was found from — worth
+  having, since a thorough run searches randomly and need not find the same plan twice.
+  Totals are recomputed from the placements on the way in, so an edited file can never
+  show figures that disagree with the picture. Files exported by earlier versions still
+  import — those without layouts simply come in ready to optimize, and a v1 single-roof
+  export becomes the first surface, keeping its keep-outs.
 - **PDF export** — the **PDF** button writes the plan as it stands on screen to a report:
   a title block with the combined Wp, panel count, panel area, weight and price, then
   every surface drawn to scale (edge margin, keep-outs, and the selected option's panels

@@ -1,5 +1,14 @@
 import { msg } from './i18n';
-import type { AllowedPanels, Config, KeepOut, Surface } from './types';
+import { summarize, taskFor, usableArea } from './optimize';
+import type {
+  AllowedPanels,
+  Config,
+  KeepOut,
+  Layout,
+  PanelOption,
+  Placement,
+  Surface,
+} from './types';
 
 const STORAGE_KEY = 'camper-solar-layout:config:v1';
 
@@ -142,15 +151,108 @@ export function saveConfig(config: Config): void {
   }
 }
 
-/** Serialize a config for manual JSON export. */
-export function exportConfig(config: Config): string {
-  return JSON.stringify({ version: CONFIG_VERSION, ...config }, null, 2);
+/**
+ * Serialize a config for manual JSON export, together with the layout shown for each
+ * surface when one has been computed.
+ *
+ * The layouts are what an optimizer run took seconds to find and what every figure on
+ * screen is about, and a thorough run searches randomly, so a re-run of an imported file
+ * need not come back with the same plan. They travel under a key of their own rather than
+ * inside the surfaces, so a reader that predates them — this app's own `migrateConfig`
+ * included — still sees exactly the configuration it always did.
+ */
+export function exportConfig(config: Config, layouts: Record<string, Layout | null> = {}): string {
+  const shown = config.surfaces.flatMap((s) => {
+    const layout = layouts[s.id];
+    return layout ? [[s.id, layout] as const] : [];
+  });
+  return JSON.stringify(
+    {
+      version: CONFIG_VERSION,
+      ...config,
+      ...(shown.length > 0 ? { layouts: Object.fromEntries(shown) } : {}),
+    },
+    null,
+    2,
+  );
 }
 
+/**
+ * One placement, or null when it is not one. A placement naming a model the catalog does
+ * not have is rejected rather than skipped: the layout around it would still be drawn,
+ * one panel short and with totals to match, and a plan quietly missing a panel is worse
+ * than one that is missing altogether.
+ */
+function toPlacement(value: unknown, byId: Map<string, PanelOption>): Placement | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const p = value as Record<string, unknown>;
+  if (typeof p.optionId !== 'string') return null;
+  const option = byId.get(p.optionId);
+  if (!option) return null;
+  if (!isNum(p.x) || !isNum(p.y) || !isNum(p.w) || !isNum(p.h)) return null;
+  return {
+    optionId: p.optionId,
+    x: p.x,
+    y: p.y,
+    w: p.w,
+    h: p.h,
+    rotated: p.rotated === true,
+    // A placement's power is its model's power by definition, so take it from the
+    // catalog the file carries rather than trusting a second copy of the same number.
+    power: option.power,
+  };
+}
+
+function toLayout(
+  value: unknown,
+  surface: Surface,
+  config: Config,
+  byId: Map<string, PanelOption>,
+): Layout | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { placements } = value as Record<string, unknown>;
+  if (!Array.isArray(placements)) return null;
+  const parsed = placements.map((p) => toPlacement(p, byId));
+  if (parsed.some((p) => p === null)) return null;
+  return summarize(parsed as Placement[], usableArea(taskFor(config, surface)));
+}
+
+/**
+ * The layouts of a payload, keyed by surface id and limited to surfaces the config
+ * actually has — an entry left behind by a surface that was since removed is simply
+ * never read, exactly as in a live optimizer result.
+ *
+ * Every total is recomputed from the placements and the config it just validated rather
+ * than read from the file, so a hand-edited payload cannot make the summary disagree with
+ * the picture, and a coverage figure is always against the margins the file really sets.
+ */
+export function migrateLayouts(value: unknown, config: Config): Record<string, Layout> {
+  if (typeof value !== 'object' || value === null) return {};
+  const source = value as Record<string, unknown>;
+  const byId = new Map(config.panelOptions.map((o) => [o.id, o]));
+  const out: Record<string, Layout> = {};
+  for (const surface of config.surfaces) {
+    const layout = toLayout(source[surface.id], surface, config, byId);
+    if (layout) out[surface.id] = layout;
+  }
+  return out;
+}
+
+/**
+ * A config as read from a file, plus whatever layouts came with it: at most one per
+ * surface, and none at all for a file written before anything was optimized, exported by
+ * an older version, or carrying layouts that do not check out.
+ */
+export type ImportedPlan = { config: Config; layouts: Record<string, Layout> };
+
 /** Parse an imported JSON string, returning null when invalid. */
-export function importConfig(text: string): Config | null {
+export function importConfig(text: string): ImportedPlan | null {
   try {
-    return migrateConfig(JSON.parse(text));
+    const parsed = JSON.parse(text) as unknown;
+    const config = migrateConfig(parsed);
+    if (!config) return null;
+    const { layouts } = parsed as Record<string, unknown>;
+    return { config, layouts: migrateLayouts(layouts, config) };
   } catch {
     return null;
   }

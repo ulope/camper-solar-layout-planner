@@ -250,7 +250,10 @@
             <div class="orow">
               <span class="otitle">
                 {$t('results.option', { index: i + 1 })}
-                {#if i === 0}<span class="badge">{$t('results.best')}</span>{/if}
+                <!-- The badge marks the top of a ranking, so it needs something to rank
+                     against: an imported plan carries the one layout that was on screen,
+                     which was not necessarily the best of the run that found it. -->
+                {#if i === 0 && options.length > 1}<span class="badge">{$t('results.best')}</span>{/if}
               </span>
               <span class="power">{$fmt.num(l.totalPower, 0)} <span class="wp">Wp</span></span>
             </div>

@@ -3,6 +3,7 @@
     config,
     setConfig,
     clearLayouts,
+    setImportedLayouts,
     layoutsBySurface,
     selectedBySurface,
     selectedLayouts,
@@ -18,8 +19,13 @@
 
   const current = $derived(localeInfo($locale));
 
+  /**
+   * The configuration as a JSON file, carrying the layout shown for each surface when
+   * there is one — so a saved plan comes back as the plan, not just the inputs it was
+   * found from.
+   */
   function doExport() {
-    const blob = new Blob([exportConfig($config)], { type: 'application/json' });
+    const blob = new Blob([exportConfig($config, $selectedLayouts)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -70,8 +76,10 @@
     const text = await file.text();
     const parsed = importConfig(text);
     if (parsed) {
-      setConfig(parsed);
-      clearLayouts();
+      // Order matters: setting the config marks the layouts stale, so the imported ones
+      // are adopted after it, not before.
+      setConfig(parsed.config);
+      setImportedLayouts(parsed.layouts);
     } else {
       alert($t('toolbar.importError'));
     }

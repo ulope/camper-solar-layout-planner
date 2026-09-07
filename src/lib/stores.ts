@@ -253,6 +253,21 @@ export function cancelOptimize(): void {
   optimizing.set(false);
 }
 
+/**
+ * Adopt the layouts an imported file carried: one option per surface, already the one
+ * shown. Not stale — they were computed for exactly the config they arrived with, which
+ * is by then the current one. A file with none clears whatever was on screen, as an
+ * import always did.
+ */
+export function setImportedLayouts(layouts: Record<string, Layout>): void {
+  const entries = Object.entries(layouts);
+  if (entries.length === 0) {
+    clearLayouts();
+    return;
+  }
+  applyResults(Object.fromEntries(entries.map(([id, layout]) => [id, [layout]])));
+}
+
 /** Clear any computed results (e.g. after import/reset). */
 export function clearLayouts(): void {
   layoutsBySurface.set({});
