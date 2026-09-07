@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { config, removePanelOption, setPanelEnabled } from '../lib/stores';
+  import { config, panelColors, removePanelOption, setPanelEnabled } from '../lib/stores';
   import { panelColor } from '../lib/colors';
   import { isPanelEnabled, isPanelFlexible } from '../lib/panels';
   import { fmt, t } from '../lib/i18n';
@@ -23,12 +23,10 @@
     if (confirm($t('panels.removeConfirm', { name: opt.name }))) removePanelOption(opt.id);
   }
 
-  // Displayed alphabetically in the UI language, but each row keeps its option's index
-  // in the stored list so the swatch matches the canvas and the results breakdown.
+  // Displayed alphabetically in the UI language; the stored order is what the color
+  // assignment keys off, so the swatch matches the canvas and the results breakdown.
   const sorted = $derived(
-    $config.panelOptions
-      .map((opt, i) => ({ opt, i }))
-      .sort((a, b) => $fmt.collator.compare(a.opt.name, b.opt.name)),
+    [...$config.panelOptions].sort((a, b) => $fmt.collator.compare(a.name, b.name)),
   );
 
   // Condensed one-line spec; optional fields are simply left out when unset.
@@ -63,7 +61,7 @@
     <p class="empty">{$t('panels.noneSelected')}</p>
   {/if}
 
-  {#each sorted as { opt, i } (opt.id)}
+  {#each sorted as opt (opt.id)}
     <div class="row" class:off={!isPanelEnabled(opt)}>
       <input
         type="checkbox"
@@ -74,7 +72,7 @@
         onchange={(e) => setPanelEnabled(opt.id, e.currentTarget.checked)}
       />
       <button class="main" onclick={() => openEdit(opt)} title={$t('panels.edit', { name: opt.name })}>
-        <span class="swatch" style="background: {panelColor(i)}"></span>
+        <span class="swatch" style="background: {$panelColors.get(opt.id) ?? panelColor(0)}"></span>
         <span class="text">
           <span class="name">{opt.name}</span>
           <span class="spec">{specOf(opt)}</span>

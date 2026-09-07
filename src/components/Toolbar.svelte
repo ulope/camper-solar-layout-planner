@@ -7,6 +7,7 @@
     layoutsBySurface,
     selectedBySurface,
     selectedLayouts,
+    panelColors,
   } from '../lib/stores';
   import { defaultConfig, exportConfig, importConfig } from '../lib/persistence';
   import OptimizeButton from './OptimizeButton.svelte';
@@ -59,6 +60,7 @@
         config: $config,
         selected: $selectedLayouts,
         selection,
+        colors: $panelColors,
         t: $t,
         fmt: $fmt,
         // Where this app is served from, so the QR code on the report comes back to the

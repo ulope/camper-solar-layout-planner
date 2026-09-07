@@ -20,7 +20,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable, { type CellHookData, type UserOptions } from 'jspdf-autotable';
 import type { Config, Layout, PanelOption, Surface } from '../types';
-import { panelColor } from '../colors';
+import { assignPanelColors, hexToRgb, panelColor } from '../colors';
 import { isPanelFlexible } from '../panels';
 import { wrapText } from '../textwrap';
 import type { Formatters } from '../format';
@@ -47,6 +47,11 @@ export type PdfReportInput = {
    * drawn and nothing refers to one.
    */
   shareUrlBase?: string;
+  /**
+   * The color each model is drawn in, by option id. Passed in so the report matches what
+   * the app is showing; left out, the report colors the models itself.
+   */
+  colors?: ReadonlyMap<string, string>;
   /** Injectable so a test gets a reproducible file. */
   date?: Date;
   /**
@@ -118,13 +123,8 @@ export function planScale(surfaces: Surface[], width: number, maxHeight: number)
 
 /** Blend two hex colors, `t` being the share of `b`. Used to tint fills for print. */
 export function mixColor(a: string, b: string, t: number): string {
-  const parse = (hex: string) => {
-    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-    const v = m ? parseInt(m[1], 16) : 0;
-    return [(v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff];
-  };
-  const [ar, ag, ab] = parse(a);
-  const [br, bg, bb] = parse(b);
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
   const channel = (x: number, y: number) =>
     Math.round(x + (y - x) * t)
       .toString(16)
@@ -211,16 +211,20 @@ type ModuleRow = {
 
 /**
  * Aggregate the placements of one or more layouts per panel model, ordered by the model's
- * Wp like the results panel's breakdown, and colored by its index in the catalog so a row
- * matches the rectangles in the drawing above it.
+ * Wp like the results panel's breakdown, and carrying the model's color so a row matches
+ * the rectangles in the drawing above it.
  */
-function moduleRows(options: PanelOption[], layouts: Layout[]): ModuleRow[] {
+function moduleRows(
+  options: PanelOption[],
+  layouts: Layout[],
+  colorOf: (optionId: string) => string,
+): ModuleRow[] {
   const counts = new Map<string, number>();
   for (const layout of layouts) {
     for (const p of layout.placements) counts.set(p.optionId, (counts.get(p.optionId) ?? 0) + 1);
   }
   return options
-    .map((option, i) => ({ option, color: panelColor(i), qty: counts.get(option.id) ?? 0 }))
+    .map((option) => ({ option, color: colorOf(option.id), qty: counts.get(option.id) ?? 0 }))
     .filter((r) => r.qty > 0)
     .map(({ option, color, qty }) => ({
       id: option.id,
@@ -504,8 +508,18 @@ export function buildLayoutPdf(input: PdfReportInput): jsPDF {
   });
   const flow = new Flow(doc);
 
-  const colorIndex = new Map(config.panelOptions.map((o, i) => [o.id, i]));
-  const colorOf = (optionId: string) => panelColor(colorIndex.get(optionId) ?? 0);
+  // Normally handed the assignment the app is showing, so the report matches the screen.
+  // Standing alone, it derives one from the layouts it was given.
+  const colors =
+    input.colors ??
+    assignPanelColors(
+      config.panelOptions.map((o) => o.id),
+      config.surfaces
+        .map((s) => selected[s.id])
+        .filter((l): l is Layout => !!l)
+        .map((l) => [...new Set(l.placements.map((p) => p.optionId))]),
+    );
+  const colorOf = (optionId: string) => colors.get(optionId) ?? panelColor(0);
   const nameOf = (optionId: string) =>
     config.panelOptions.find((o) => o.id === optionId)?.name ?? '';
 
@@ -513,7 +527,7 @@ export function buildLayoutPdf(input: PdfReportInput): jsPDF {
     .map((s) => selected[s.id] ?? null)
     .filter((l): l is Layout => l !== null);
 
-  const rows = moduleRows(config.panelOptions, layouts);
+  const rows = moduleRows(config.panelOptions, layouts, colorOf);
 
   // ----- The plan's own QR code -----
   // Built before the header is laid out: whether there is a code decides whether the
@@ -718,7 +732,7 @@ function drawSurfaceSection(
 
   // The per-surface table belongs with the drawing it breaks down, so it is part of the
   // room the section asks for, and the drawing gives way to it rather than the reverse.
-  const rows = layout ? moduleRows(config.panelOptions, [layout]) : [];
+  const rows = layout ? moduleRows(config.panelOptions, [layout], colorOf) : [];
   const tableRoom = ctx.showTable && rows.length > 0 ? tableHeight(rows.length) : 0;
 
   const planH = surface.width > 0 && surface.height > 0 ? surface.height * scale : 0;

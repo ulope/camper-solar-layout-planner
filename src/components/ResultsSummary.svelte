@@ -6,6 +6,7 @@
     selectedLayouts,
     selectSurfaceLayout,
     rankOptions,
+    panelColors,
   } from '../lib/stores';
   import { panelColor } from '../lib/colors';
   import { isPanelFlexible } from '../lib/panels';
@@ -115,15 +116,15 @@
     $rankOptions.criteria.length > 0 && options.length > 1;
 
   // Per-model breakdown for a given layout, ordered by panel Wp (highest first).
-  // Color is taken from the option's original index so it matches the canvas.
+  // Colors come from the shared assignment so they match the canvas and the PDF.
   function breakdownFor(l: Layout) {
     return $config.panelOptions
-      .map((opt, i) => {
+      .map((opt) => {
         const items = l.placements.filter((p) => p.optionId === opt.id);
         return {
           id: opt.id,
           name: opt.name,
-          color: panelColor(i),
+          color: $panelColors.get(opt.id) ?? panelColor(0),
           count: items.length,
           power: items.reduce((s, p) => s + p.power, 0),
           wp: opt.power,
