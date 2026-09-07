@@ -27,13 +27,13 @@ export const en = {
   'surfaces.nameLabel': 'Surface name',
   'surfaces.removeTitle': 'Remove surface',
   'surfaces.empty': 'No surfaces yet.',
+  'surfaces.add': '+ Add surface',
   'surfaces.select': 'Select {name}',
   'surfaces.edit': 'Edit {name}',
   'surfaces.activeTitle': 'Active surface — new keep-outs are added here',
   'surfaces.showKeepOuts': 'Show keep-out areas of {name}',
   'surfaces.hideKeepOuts': 'Hide keep-out areas of {name}',
   'surfaces.meta': '{size} · {allowed}',
-  'surfaces.remove': 'Remove {name}',
   'surfaces.length': 'Length',
   'surfaces.width': 'Width (depth)',
   'surfaces.panels': 'Panels',
@@ -60,11 +60,11 @@ export const en = {
   'panels.title': 'Panel options',
   'panels.hint':
     'Candidate models the optimizer can choose from. Untick one to leave it out; click one to edit it.',
+  'panels.add': '+ Add model',
   'panels.empty': 'No panel models yet. Add at least one.',
   'panels.noneSelected': 'All models are deselected — tick at least one to optimize.',
   'panels.use': 'Use {name} when optimizing',
   'panels.edit': 'Edit {name}',
-  'panels.remove': 'Remove {name}',
   'panels.removeConfirm': 'Remove the panel model “{name}”?',
   'panels.size': '{width}×{height} cm',
   'panels.flexible': 'flexible',
@@ -119,11 +119,10 @@ export const en = {
   'keepOuts.hint': 'Hatches, vents, antennas. Drag on the canvas to draw one.',
   'keepOuts.empty': 'No keep-out areas on this surface.',
   'keepOuts.count': { one: '{count} keep-out', other: '{count} keep-outs' },
-  'keepOuts.add': 'Add keep-out',
+  'keepOuts.add': '+ Add keep-out',
   'keepOuts.addTo': 'Add a keep-out to {name}',
   'keepOuts.edit': 'Edit {name}',
   'keepOuts.rect': '{x}, {y} · {width}×{height} cm',
-  'keepOuts.remove': 'Remove',
   'keepOuts.x': 'X',
   'keepOuts.y': 'Y',
   'keepOuts.length': 'L',
@@ -182,6 +181,22 @@ export const en = {
   'criterionPhrase.weight': 'lighter',
   'criterionPhrase.price': 'cheaper',
   'criterionPhrase.panelTypes': 'fewer panel types',
+
+  // ----- Sidebar shell -----
+  'sidebar.label': 'Plan',
+  'sidebar.collapse': 'Collapse sidebar',
+  'sidebar.expand': 'Expand sidebar',
+  'sidebar.resize': 'Resize sidebar',
+
+  // ----- Overview -----
+  'overview.title': 'Overview',
+  'overview.inputs': '{surfaces} · {area}',
+  'overview.catalog': '{keepOuts} · {models}',
+  'overview.models': {
+    one: '{enabled} of {count} model',
+    other: '{enabled} of {count} models',
+  },
+  'overview.resultMeta': '{panels} · {coverage}% coverage',
 
   // ----- Results -----
   'results.title': 'Results',
@@ -279,7 +294,6 @@ export const en = {
   'canvas.power': '{power} Wp',
 
   // ----- Shared -----
-  'common.add': '+ Add',
   'common.cancel': 'Cancel',
   'common.save': 'Save',
   'common.delete': 'Delete',

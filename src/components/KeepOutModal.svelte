@@ -104,8 +104,9 @@
       <p class="warn">{$t('keepOutModal.outside')}</p>
     {/if}
     <p class="hint">
+      {$t('keepOuts.hint')}
       {$t('keepOutModal.hint')}
-      {#if owner}{' '}{$t('keepOutModal.onSurface', { name: owner.name })}{/if}
+      {#if owner}{$t('keepOutModal.onSurface', { name: owner.name })}{/if}
     </p>
   </div>
 

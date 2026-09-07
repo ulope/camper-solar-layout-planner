@@ -10,7 +10,6 @@
     title,
     badge,
     hint,
-    action,
     children,
   }: {
     id: SectionId;
@@ -18,8 +17,6 @@
     /** Short count shown next to the title, e.g. "4" or "3 / 5". */
     badge?: string;
     hint?: string;
-    /** Header-level action, e.g. an Add button. Kept outside the disclosure button. */
-    action?: Snippet;
     children: Snippet;
   } = $props();
 
@@ -39,9 +36,6 @@
       <h2>{title}</h2>
       {#if badge}<span class="badge">{badge}</span>{/if}
     </button>
-    {#if action}
-      <div class="action">{@render action()}</div>
-    {/if}
   </div>
   <div class="body" id={bodyId} hidden={!open}>
     {#if hint}<p class="hint">{hint}</p>{/if}
@@ -100,11 +94,6 @@
     padding: 1px 6px;
     border-radius: 9px;
     background: var(--panel-bg-2);
-  }
-  /* Translations run longer than English; keep the action on one line. */
-  .action :global(button) {
-    flex: none;
-    white-space: nowrap;
   }
   .body {
     padding-top: 4px;

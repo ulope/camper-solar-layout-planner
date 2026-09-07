@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { config, panelColors, removePanelOption, setPanelEnabled } from '../lib/stores';
+  import { config, panelColors, setPanelEnabled } from '../lib/stores';
   import { panelColor } from '../lib/colors';
   import { isPanelEnabled, isPanelFlexible } from '../lib/panels';
   import { fmt, t } from '../lib/i18n';
@@ -17,10 +17,6 @@
   function openEdit(opt: PanelOption) {
     editing = opt;
     modalOpen = true;
-  }
-
-  function remove(opt: PanelOption) {
-    if (confirm($t('panels.removeConfirm', { name: opt.name }))) removePanelOption(opt.id);
   }
 
   // Displayed alphabetically in the UI language; the stored order is what the color
@@ -48,13 +44,7 @@
   );
 </script>
 
-<section class="card">
-  <div class="head">
-    <h2>{$t('panels.title')}</h2>
-    <button class="ghost" onclick={openAdd}>{$t('common.add')}</button>
-  </div>
-  <p class="hint">{$t('panels.hint')}</p>
-
+<div class="list">
   {#if $config.panelOptions.length === 0}
     <p class="empty">{$t('panels.empty')}</p>
   {:else if noneSelected}
@@ -78,46 +68,15 @@
           <span class="spec">{specOf(opt)}</span>
         </span>
       </button>
-      <button
-        class="danger ghost del"
-        title={$t('panels.remove', { name: opt.name })}
-        aria-label={$t('panels.remove', { name: opt.name })}
-        onclick={() => remove(opt)}>×</button
-      >
     </div>
   {/each}
-</section>
+
+  <button class="ghost add" onclick={openAdd}>{$t('panels.add')}</button>
+</div>
 
 <PanelOptionModal bind:open={modalOpen} option={editing} />
 
 <style>
-  .card {
-    background: var(--panel-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    margin-bottom: 12px;
-  }
-  .head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-  }
-  /* Translations make the action wider than English does; let the heading wrap instead
-     of breaking the button across two lines. */
-  .head button {
-    flex: none;
-    white-space: nowrap;
-  }
-  h2 {
-    font-size: 14px;
-  }
-  .hint {
-    color: var(--text-dim);
-    font-size: 12px;
-    margin: 4px 0 10px;
-  }
   .empty {
     color: var(--text-dim);
     font-size: 13px;
@@ -125,9 +84,11 @@
   }
   .row {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto 1fr;
     align-items: center;
     gap: 4px;
+  }
+  .row + .row {
     border-top: 1px solid var(--border);
   }
   /* Deselected models stay readable but visibly out of the running. */
@@ -146,8 +107,7 @@
     gap: 9px;
     width: 100%;
     min-width: 0;
-    padding: 8px 8px 8px 6px;
-    margin: 0 -8px 0 -2px;
+    padding: 6px 6px 6px 4px;
     text-align: left;
     background: transparent;
     border: none;
@@ -179,10 +139,10 @@
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
   }
-  .del {
-    font-size: 18px;
-    line-height: 1;
-    padding: 2px 8px;
-    border-color: transparent;
+  .add {
+    margin-top: 6px;
+    width: 100%;
+    font-size: 12px;
+    padding: 5px 8px;
   }
 </style>

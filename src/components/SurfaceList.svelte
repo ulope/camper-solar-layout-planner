@@ -198,7 +198,7 @@
             <button
               class="ghost add-ko"
               aria-label={$t('keepOuts.addTo', { name: s.name })}
-              onclick={() => openAddKeepOut(s)}>+ {$t('keepOuts.add')}</button
+              onclick={() => openAddKeepOut(s)}>{$t('keepOuts.add')}</button
             >
           </li>
         </ul>
@@ -207,7 +207,7 @@
   {/each}
 </ul>
 
-<button class="ghost add-surface" onclick={openAddSurface}>{$t('common.add')}</button>
+<button class="ghost add-surface" onclick={openAddSurface}>{$t('surfaces.add')}</button>
 
 <SurfaceModal bind:open={surfaceModalOpen} surface={editingSurface} />
 <KeepOutModal

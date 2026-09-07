@@ -62,12 +62,18 @@ function load(): SidebarPrefs {
 
 export const sidebarPrefs = writable<SidebarPrefs>(load());
 
+// Debounced like the config autosave: a resize drag updates the width on every pointer
+// move, and none of those intermediate values is worth a write.
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
 sidebarPrefs.subscribe((p) => {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(p));
-  } catch {
-    // best-effort
-  }
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(p));
+    } catch {
+      // best-effort
+    }
+  }, 250);
 });
 
 export function toggleSidebar(): void {

@@ -31,13 +31,13 @@ export const de: Catalog = {
   'surfaces.nameLabel': 'Name der Fläche',
   'surfaces.removeTitle': 'Fläche entfernen',
   'surfaces.empty': 'Noch keine Flächen.',
+  'surfaces.add': '+ Fläche',
   'surfaces.select': '{name} auswählen',
   'surfaces.edit': '{name} bearbeiten',
   'surfaces.activeTitle': 'Aktive Fläche – neue Sperrflächen landen hier',
   'surfaces.showKeepOuts': 'Sperrflächen von {name} anzeigen',
   'surfaces.hideKeepOuts': 'Sperrflächen von {name} ausblenden',
   'surfaces.meta': '{size} · {allowed}',
-  'surfaces.remove': '{name} entfernen',
   'surfaces.length': 'Länge',
   'surfaces.width': 'Breite (Tiefe)',
   'surfaces.panels': 'Module',
@@ -66,12 +66,12 @@ export const de: Catalog = {
   'panels.title': 'Modul-Optionen',
   'panels.hint':
     'Modelle, aus denen der Optimierer wählen kann. Häkchen entfernen, um ein Modell auszuschließen; anklicken, um es zu bearbeiten.',
+  'panels.add': '+ Modell',
   'panels.empty': 'Noch keine Modulmodelle. Füge mindestens eins hinzu.',
   'panels.noneSelected':
     'Alle Modelle sind abgewählt – wähle mindestens eins aus, um zu optimieren.',
   'panels.use': '{name} beim Optimieren verwenden',
   'panels.edit': '{name} bearbeiten',
-  'panels.remove': '{name} entfernen',
   'panels.removeConfirm': 'Modulmodell „{name}“ entfernen?',
   'panels.size': '{width}×{height} cm',
   'panels.flexible': 'flexibel',
@@ -128,11 +128,10 @@ export const de: Catalog = {
   'keepOuts.hint': 'Luken, Lüfter, Antennen. Zum Zeichnen auf der Zeichenfläche ziehen.',
   'keepOuts.empty': 'Keine Sperrflächen auf dieser Fläche.',
   'keepOuts.count': { one: '{count} Sperrfläche', other: '{count} Sperrflächen' },
-  'keepOuts.add': 'Sperrfläche hinzufügen',
+  'keepOuts.add': '+ Sperrfläche',
   'keepOuts.addTo': 'Eine Sperrfläche zu {name} hinzufügen',
   'keepOuts.edit': '{name} bearbeiten',
   'keepOuts.rect': '{x}, {y} · {width}×{height} cm',
-  'keepOuts.remove': 'Entfernen',
   'keepOuts.x': 'X',
   'keepOuts.y': 'Y',
   'keepOuts.length': 'L',
@@ -191,6 +190,22 @@ export const de: Catalog = {
   'criterionPhrase.weight': 'geringerem Gewicht',
   'criterionPhrase.price': 'niedrigerem Preis',
   'criterionPhrase.panelTypes': 'weniger Modultypen',
+
+  // ----- Sidebar shell -----
+  'sidebar.label': 'Plan',
+  'sidebar.collapse': 'Seitenleiste einklappen',
+  'sidebar.expand': 'Seitenleiste ausklappen',
+  'sidebar.resize': 'Breite der Seitenleiste ändern',
+
+  // ----- Overview -----
+  'overview.title': 'Überblick',
+  'overview.inputs': '{surfaces} · {area}',
+  'overview.catalog': '{keepOuts} · {models}',
+  'overview.models': {
+    one: '{enabled} von {count} Modell',
+    other: '{enabled} von {count} Modellen',
+  },
+  'overview.resultMeta': '{panels} · {coverage} % Abdeckung',
 
   // ----- Results -----
   'results.title': 'Ergebnisse',
@@ -293,7 +308,6 @@ export const de: Catalog = {
   'canvas.power': '{power} Wp',
 
   // ----- Shared -----
-  'common.add': '+ Hinzufügen',
   'common.cancel': 'Abbrechen',
   'common.save': 'Speichern',
   'common.delete': 'Löschen',

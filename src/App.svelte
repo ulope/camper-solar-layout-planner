@@ -1,12 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Toolbar from './components/Toolbar.svelte';
-  import SurfaceList from './components/SurfaceList.svelte';
-  import PanelOptionsList from './components/PanelOptionsList.svelte';
-  import SpacingForm from './components/SpacingForm.svelte';
+  import Sidebar from './components/Sidebar.svelte';
   import LayoutCanvas from './components/LayoutCanvas.svelte';
   import ResultsSummary from './components/ResultsSummary.svelte';
   import ResizeHandle from './components/ResizeHandle.svelte';
+  import { sidebarPrefs, SIDEBAR_RAIL_W } from './lib/uiPrefs';
   import { t } from './lib/i18n';
   import { PLAN_FRAGMENT_KEY } from './lib/share/fragment';
 
@@ -42,6 +41,10 @@
 
   let resultsW = $state(loadW());
 
+  // The sidebar's own width is view state it persists itself; the grid track has to read
+  // it from here, since a custom property set on the aside cannot size its parent's track.
+  const sidebarW = $derived($sidebarPrefs.collapsed ? SIDEBAR_RAIL_W : $sidebarPrefs.width);
+
   function saveResultsW() {
     try {
       localStorage.setItem(RW_KEY, String(resultsW));
@@ -53,12 +56,8 @@
 
 <div class="app">
   <Toolbar />
-  <div class="body" style="--results-w: {resultsW}px">
-    <aside class="sidebar">
-      <SurfaceList />
-      <PanelOptionsList />
-      <SpacingForm />
-    </aside>
+  <div class="body" style="--results-w: {resultsW}px; --sidebar-w: {sidebarW}px">
+    <Sidebar />
     <main class="stage">
       <LayoutCanvas />
     </main>
@@ -84,19 +83,13 @@
   .body {
     flex: 1;
     display: grid;
-    grid-template-columns: 320px 1fr var(--results-w, 300px);
+    grid-template-columns: var(--sidebar-w, 320px) 1fr var(--results-w, 300px);
     min-height: 0;
   }
-  .sidebar,
   .results {
     overflow-y: auto;
     padding: 14px;
     background: var(--bg);
-  }
-  .sidebar {
-    border-right: 1px solid var(--border);
-  }
-  .results {
     position: relative;
     border-left: 1px solid var(--border);
   }

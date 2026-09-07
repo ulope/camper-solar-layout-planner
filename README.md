@@ -38,6 +38,12 @@ https://ulope.github.io/camper-solar-layout-planner/
 
 ## Features
 
+- **Sidebar** — the plan at a glance: an overview of what is configured (surfaces, area,
+  keep-outs, selected models) and, once optimized, the total Wp, panel count and coverage.
+  Below it, one collapsible section per part of the plan, with surfaces listed as one-line
+  rows that expand to show their own keep-outs. Rows select and disclose; every field is
+  edited in a dialog, so a plan with many surfaces stays scannable. The whole sidebar
+  collapses to a rail of icons or is dragged to any width, and remembers both.
 - **Surfaces** — plan any number of surfaces at once (roof plus one or two sidewalls,
   say), each with its own name, length × width (cm) and keep-outs. They are drawn stacked
   vertically on one canvas and all are optimized together. Edge margin and inter-panel gap
@@ -46,12 +52,13 @@ https://ulope.github.io/camper-solar-layout-planner/
   (bendable), and each surface declares which it accepts: **Rigid**, **Flexible** or
   **Both**. A curved or thin wall can then be planned with flexible models only while the
   roof keeps its framed ones. Surfaces default to Both, so nothing changes until you
-  restrict one; if a surface allows a type you have no model selected for, it says so
-  inline rather than silently coming back empty.
-- **Keep-out areas** — belong to a surface; add by dragging on that surface in the canvas
-  or via the list, **drag to move** and **drag edges/corners to resize**. Each shows its
-  live size, and while dragging or resizing, golden guide lines mark the edge positions and
-  the clearance to each edge of the surface it sits on.
+  restrict one; if a surface allows a type you have no model selected for, its row is
+  flagged rather than silently coming back empty.
+- **Keep-out areas** — belong to a surface, and are listed under it in the sidebar; add by
+  dragging on that surface in the canvas or from its row, **drag to move** and **drag
+  edges/corners to resize**. Drawing one on the canvas reveals and selects it in the
+  sidebar. Each shows its live size, and while dragging or resizing, golden guide lines
+  mark the edge positions and the clearance to each edge of the surface it sits on.
 - **Grid snapping** — optional snap (Off / 1 / 5 / 10 cm) for all canvas edits, with a
   grid overlay at the coarser steps.
 - **Canvas** — all surfaces stacked vertically and labeled, with the one the sidebar
