@@ -151,6 +151,8 @@ export const en = {
     'A {system} V bank charges to about {chargeEnd} V, so a string is planned against {min} V — 95% of that, plus 1 V.',
   'optimizer.voltageNote':
     'A model’s panels are wired as one series string, so a panel below {min} V is only placed when enough of them fit on the same surface.',
+  'optimizer.voltageDistributeNote':
+    'Such a model is also placed only in a count that splits into equal strings — a prime count above 3 would leave one long string on a single charger, so the odd panel is given back.',
   'optimizer.restrictedHead': 'Only usable in strings of:',
   'optimizer.restrictedNeed': '{count} × {voltage} V',
   'optimizer.voltageGap': {

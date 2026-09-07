@@ -82,12 +82,16 @@ https://ulope.github.io/camper-solar-layout-planner/
   threshold. Panels of one model are wired as a series string, so a model whose Vmp is
   below the threshold is only placed when enough of them fit on the same surface to add
   up to it — a single 12 V panel is never planned for a 24 V system, but three of them
-  are. The presets are named after the *nominal* system voltage but plan against what the
-  bank actually charges to: **28.7 V** for a 24 V system and **56.5 V** for a 48 V one
-  (see below). Models with no voltage recorded are never restricted, and the dropdown says
-  how many those are. A **Details…** toggle expands the reasoning together with a list of
-  every restricted model and the string it needs (e.g. `100 W mono · 2 × 18 V`), which
-  scrolls rather than growing the panel when the catalog is large.
+  are. Such a model is also only placed in a count that can be split across chargers: a
+  prime count above 3 has no wiring but one long string on a single tracker, so the layout
+  hands the odd panel back (five 12 V panels on a 24 V system become four) and the freed
+  area goes to a model that can use it. The presets are named after the *nominal* system
+  voltage but plan against what the bank actually charges to: **28.7 V** for a 24 V system
+  and **56.5 V** for a 48 V one (see below). Models with no voltage recorded are never
+  restricted, and the dropdown says how many those are. A **Details…** toggle expands the
+  reasoning together with a list of every restricted model and the string it needs
+  (e.g. `100 W mono · 2 × 18 V`), which scrolls rather than growing the panel when the
+  catalog is large.
 - **Secondary criteria** *(optional)* — rank near-equal layouts by **weight**, **price**
   and/or **number of distinct panel models used**, in a priority order you choose. Total
   Wp remains the primary objective, and the adjustable **tolerance** (default 10%) applies
@@ -198,11 +202,23 @@ demanded. Type any other figure into the threshold field to plan against your ow
 **Minimum string voltage** is a constraint rather than a criterion, so it acts *during*
 the search. Whether a sub-threshold model is admissible depends on how many of it a layout
 places, which is not known until the panels are down, so every packing result passes
-through a filter that drops the panels of any model short of its series count. The area
-they held becomes free space again, so the thorough search's next refill can hand it to a
-compliant model instead, and the fast sweep additionally packs orderings built only from
-the models that clear the threshold unaided. When no model in the catalog is restricted
-the filter is the identity function and both searches run exactly as before.
+through a filter that cuts each restricted model back to a count it can be wired at. The
+area those panels held becomes free space again, so the thorough search's next refill can
+hand it to a compliant model instead, and the fast sweep additionally packs orderings built
+only from the models that clear the threshold unaided. When no model in the catalog is
+restricted the filter is the identity function and both searches run exactly as before.
+
+A count is wireable when it is at least one whole series string **and** it divides into
+equal strings. Strings paralleled onto one MPPT have to be the same length, so a count
+splits into *k* strings only where *k* divides it — and a prime count divides only by 1 and
+itself, leaving a single string that puts the model's entire power on one tracker at its
+full stacked voltage, with no way to spread it over the chargers on board. Counts up to 3
+are exempt, being the minimal strings the threshold itself asks for; from 5 up a prime
+count costs one panel, which is always enough, since every prime above 3 is odd and the
+even number below it is composite. A model whose *string length* is itself a prime above 3
+(12 V panels against a 60 V threshold, say) is dropped outright at exactly that count — the
+next admissible number is one panel more, not fewer. Models that clear the threshold alone
+are untouched: they wire one per tracker in any quantity.
 
 **Secondary criteria** are applied to that pool after the search, never during it: the
 layouts within the tolerance band below the best total Wp are treated as equivalent and

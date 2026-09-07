@@ -3,6 +3,7 @@ import { optimize, optimizeVariants, buildFreeRects, usableArea, taskFor } from 
 import { overlaps, contains } from './geometry';
 import { migrateConfig } from './persistence';
 import { layoutWeight, optionsById } from './ranking';
+import { distributable } from './voltage';
 import type { PanelOption, Placement, Rect, SurfaceTask } from './types';
 import layout4 from './__fixtures__/solar-layout-4.json';
 
@@ -346,12 +347,30 @@ describe('minimum string voltage', () => {
     expect(restricted.placements.map((p) => p.optionId)).toEqual(['hi', 'hi', 'hi']);
   });
 
+  it('gives a panel back when the count cannot be distributed onto chargers', () => {
+    // 500x100 takes five of the 12 V panels. Five is prime, so the only wiring is a
+    // single 60 V string on one tracker — the layout keeps four and frees the fifth.
+    const config = baseConfig({ width: 500, panelOptions: [low] });
+    expect(optimize(config).placements).toHaveLength(5);
+
+    const restricted = optimize({ ...config, minVoltage: 24 });
+    expect(restricted.placements).toHaveLength(4);
+    expect(restricted.totalPower).toBe(400);
+  });
+
+  it('keeps a count that already splits into equal strings', () => {
+    const config = baseConfig({ width: 600, panelOptions: [low], minVoltage: 24 });
+    expect(optimize(config).placements).toHaveLength(6);
+  });
+
   it('never returns a layout that violates the threshold', () => {
-    const config = baseConfig({ width: 150, panelOptions: [low, compliant], minVoltage: 24 });
+    const config = baseConfig({ width: 550, panelOptions: [low, compliant], minVoltage: 24 });
     for (const variant of optimizeVariants(config, 5)) {
       const counts = new Map<string, number>();
       for (const p of variant.placements) counts.set(p.optionId, (counts.get(p.optionId) ?? 0) + 1);
-      expect(counts.get('low') ?? 0).not.toBe(1);
+      const lows = counts.get('low') ?? 0;
+      expect(lows).not.toBe(1); // short of a 24 V string
+      expect(distributable(lows)).toBe(true); // and wireable onto chargers
     }
   });
 

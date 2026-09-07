@@ -9,7 +9,8 @@ import type { PanelOption, Placement } from './types';
  * is exactly the readout the results panel already shows (all panels of one model as one
  * series string). The constraint is therefore a property of a layout's composition, not
  * of the catalog: a model is admissible when the layout places at least
- * {@link seriesCountFor} of it.
+ * {@link seriesCountFor} of it, in a count that can actually be wired onto chargers
+ * (see {@link distributable}).
  */
 
 /**
@@ -86,15 +87,62 @@ export function restrictedPanels(
     .filter((r) => r.needed > 1);
 }
 
+/** Whether `n` is prime. Only ever asked about panel counts, so trial division is ample. */
+export function isPrime(n: number): boolean {
+  if (!Number.isInteger(n) || n < 2) return false;
+  if (n % 2 === 0) return n === 2;
+  for (let d = 3; d * d <= n; d += 2) if (n % d === 0) return false;
+  return true;
+}
+
 /**
- * Drop every placement whose model falls short of `minVoltage` in series — i.e. models
- * the layout places fewer of than {@link seriesCountFor} demands. Removing one model's
- * panels never changes another's count, so a single pass is exact.
+ * Whether `count` panels of a *restricted* model can be split across chargers.
+ *
+ * Such a model is only usable in series strings, and strings wired in parallel onto one
+ * MPPT have to be the same length — so a count splits into `k` strings of `count / k`
+ * only where `k` divides `count`. A prime count has no divisor but 1 and itself, which
+ * leaves a single string of everything: one tracker carrying the whole model's power at
+ * the full stacked voltage, with no way to spread it over the chargers actually on board.
+ *
+ * Counts up to 3 are exempt: they are the minimal strings the threshold itself asks for,
+ * and one small string on one tracker is how such an array is wired anyway. From 5 up, a
+ * prime count is rejected and the layout gives a panel back (see {@link admissibleCount});
+ * that panel's area is then free for a model that can use it.
+ */
+export function distributable(count: number): boolean {
+  return count <= 3 || !isPrime(count);
+}
+
+/**
+ * How many of a restricted model a layout may keep, having placed `count` of them and
+ * needing `needed` per string: the largest admissible count at or below `count`, or 0
+ * when there is none (fewer placed than one string needs, or `needed` itself is a prime
+ * above 3 and the surface holds exactly that many).
+ *
+ * The search never has to give back more than a single panel in practice — every prime
+ * above 3 is odd, so `count - 1` is an even number ≥ 4 and therefore composite — but the
+ * walk downwards is what makes that a consequence rather than an assumption.
+ */
+export function admissibleCount(count: number, needed: number): number {
+  for (let n = count; n >= needed; n--) if (distributable(n)) return n;
+  return 0;
+}
+
+/**
+ * Cut every restricted model back to a count that can actually be wired: at least
+ * {@link seriesCountFor} panels, in a number that splits across chargers
+ * ({@link distributable}). A model short of one whole string loses all its panels; one
+ * placed at a prime count above 3 gives a single panel back. Removing one model's panels
+ * never changes another's count, so a single pass is exact.
+ *
+ * The panels kept are the first the packer placed. Every panel of a model is worth the
+ * same Wp, so which one goes costs nothing either way, and dropping from the tail hands
+ * back the most marginal position rather than one the packing was built around.
  *
  * Applied to a packing result rather than to the catalog beforehand, because whether a
- * sub-threshold model is allowed depends on how many of it the packer managed to place.
- * Dropping is also what keeps the search honest: the freed area is real free space that
- * a later refill can hand to a compliant model.
+ * sub-threshold model is allowed — and how many of it — depends on what the packer
+ * managed to place. Dropping is also what keeps the search honest: the freed area is real
+ * free space that a later refill can hand to a compliant model.
  */
 export function enforceMinVoltage(
   placements: Placement[],
@@ -106,7 +154,19 @@ export function enforceMinVoltage(
 
   const counts = new Map<string, number>();
   for (const p of placements) counts.set(p.optionId, (counts.get(p.optionId) ?? 0) + 1);
-  return placements.filter((p) => (counts.get(p.optionId) ?? 0) >= (needed.get(p.optionId) ?? 1));
+
+  // Per restricted model, how many panels are still allowed through; unrestricted models
+  // never enter the map and so keep every placement.
+  const budget = new Map<string, number>();
+  for (const [id, n] of needed) budget.set(id, admissibleCount(counts.get(id) ?? 0, n));
+
+  return placements.filter((p) => {
+    const left = budget.get(p.optionId);
+    if (left === undefined) return true;
+    if (left <= 0) return false;
+    budget.set(p.optionId, left - 1);
+    return true;
+  });
 }
 
 /** A layout's placements, unchanged. */

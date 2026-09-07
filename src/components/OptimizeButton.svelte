@@ -173,6 +173,7 @@
             {$t('optimizer.voltageNote', { min: $fmt.num(minVoltage) })}
           </p>
           {#if $voltageRestricted.length > 0}
+            <p class="note">{$t('optimizer.voltageDistributeNote')}</p>
             <p class="rhead">{$t('optimizer.restrictedHead')}</p>
             <ul class="restricted">
               {#each $voltageRestricted as r (r.option.id)}
