@@ -6,6 +6,7 @@
   import KeepOutList from './components/KeepOutList.svelte';
   import LayoutCanvas from './components/LayoutCanvas.svelte';
   import ResultsSummary from './components/ResultsSummary.svelte';
+  import ResizeHandle from './components/ResizeHandle.svelte';
   import { t } from './lib/i18n';
   import { PLAN_FRAGMENT_KEY } from './lib/share/fragment';
 
@@ -28,7 +29,7 @@
   const RW_KEY = 'camper-solar-layout:resultsW:v1';
   const MIN_W = 220;
   const MAX_W = 640;
-  const clampW = (n: number) => Math.min(MAX_W, Math.max(MIN_W, n));
+  const clampW = (n: number) => Math.min(MAX_W, Math.max(MIN_W, Math.round(n)));
 
   function loadW(): number {
     try {
@@ -40,23 +41,8 @@
   }
 
   let resultsW = $state(loadW());
-  let dragging = false;
-  let startX = 0;
-  let startW = 0;
 
-  function onHandleDown(e: PointerEvent) {
-    dragging = true;
-    startX = e.clientX;
-    startW = resultsW;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }
-  function onHandleMove(e: PointerEvent) {
-    if (!dragging) return;
-    resultsW = clampW(startW + (startX - e.clientX)); // drag left widens
-  }
-  function onHandleUp() {
-    if (!dragging) return;
-    dragging = false;
+  function saveResultsW() {
     try {
       localStorage.setItem(RW_KEY, String(resultsW));
     } catch {
@@ -77,16 +63,13 @@
       <LayoutCanvas />
     </main>
     <aside class="results">
-      <div
-        class="resize-handle"
-        class:dragging
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={$t('app.resizeResults')}
-        onpointerdown={onHandleDown}
-        onpointermove={onHandleMove}
-        onpointerup={onHandleUp}
-      ></div>
+      <ResizeHandle
+        edge="left"
+        width={resultsW}
+        label={$t('app.resizeResults')}
+        onresize={(w) => (resultsW = clampW(w))}
+        oncommit={saveResultsW}
+      />
       <ResultsSummary />
     </aside>
   </div>
@@ -117,31 +100,6 @@
     position: relative;
     border-left: 1px solid var(--border);
   }
-  .resize-handle {
-    position: absolute;
-    top: 0;
-    left: -3px;
-    width: 7px;
-    height: 100%;
-    cursor: col-resize;
-    z-index: 5;
-    touch-action: none;
-  }
-  .resize-handle::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 3px;
-    width: 1px;
-    height: 100%;
-    background: transparent;
-    transition: background 0.12s;
-  }
-  .resize-handle:hover::after,
-  .resize-handle.dragging::after {
-    background: var(--accent);
-    width: 2px;
-  }
   .stage {
     min-width: 0;
     background: #0a0e13;
@@ -155,9 +113,6 @@
     }
     .stage {
       height: 60vh;
-    }
-    .resize-handle {
-      display: none;
     }
   }
 </style>
