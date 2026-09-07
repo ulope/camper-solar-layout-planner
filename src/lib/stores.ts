@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import type { Config, Layout, KeepOut, PanelOption, Surface, SurfaceResults } from './types';
+import type { Config, Layout, KeepOut, PanelOption, Rect, Surface, SurfaceResults } from './types';
 import { loadConfig, saveConfig } from './persistence';
 import { optimizeFastAll, optimizeThoroughAll } from './optimizeAll';
 import { ALL_CRITERIA, DEFAULT_RANK, type RankOptions, type SecondaryCriterion } from './ranking';
@@ -334,8 +334,14 @@ export function removePanelOption(id: string): void {
 
 // ----- Surfaces -----
 
-/** Append a surface and make it the active one; returns its new id. */
-export function addSurface(): string {
+/**
+ * Append a surface and make it the active one; returns its new id. `init` lets a caller
+ * that already collected the values (the surface dialog) create the surface in one step
+ * rather than adding a default one and immediately patching it.
+ */
+export function addSurface(
+  init: Partial<Pick<Surface, 'name' | 'width' | 'height' | 'allowedPanels'>> = {},
+): string {
   const id = makeId('surface');
   config.update((c) => ({
     ...c,
@@ -348,6 +354,7 @@ export function addSurface(): string {
         height: 100,
         keepOuts: [],
         allowedPanels: 'both',
+        ...init,
       },
     ],
   }));
@@ -383,9 +390,12 @@ export function removeSurface(id: string): void {
 // Keyed by keep-out id rather than by (surface, keep-out): ids are unique across the
 // whole config, so callers that already hold one never need to know which surface owns it.
 
-/** Add a keep-out to a surface, defaulting to the active one. */
+/**
+ * Add a keep-out to a surface, defaulting to the active one. An explicit label overrides
+ * the generated default, so the dialog can create one already named.
+ */
 export function addKeepOut(
-  rect: { x: number; y: number; w: number; h: number },
+  rect: Rect & { label?: string },
   surfaceId: string = get(activeSurfaceId),
 ): string {
   const id = makeId('keepout');

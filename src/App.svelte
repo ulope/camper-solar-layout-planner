@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Toolbar from './components/Toolbar.svelte';
-  import SurfacesForm from './components/SurfacesForm.svelte';
-  import PanelOptionsList from './components/PanelOptionsList.svelte';
-  import KeepOutList from './components/KeepOutList.svelte';
+  import Sidebar from './components/Sidebar.svelte';
   import LayoutCanvas from './components/LayoutCanvas.svelte';
   import ResultsSummary from './components/ResultsSummary.svelte';
+  import ResizeHandle from './components/ResizeHandle.svelte';
+  import { sidebarPrefs, SIDEBAR_RAIL_W } from './lib/uiPrefs';
   import { t } from './lib/i18n';
   import { PLAN_FRAGMENT_KEY } from './lib/share/fragment';
 
@@ -28,7 +28,7 @@
   const RW_KEY = 'camper-solar-layout:resultsW:v1';
   const MIN_W = 220;
   const MAX_W = 640;
-  const clampW = (n: number) => Math.min(MAX_W, Math.max(MIN_W, n));
+  const clampW = (n: number) => Math.min(MAX_W, Math.max(MIN_W, Math.round(n)));
 
   function loadW(): number {
     try {
@@ -40,23 +40,12 @@
   }
 
   let resultsW = $state(loadW());
-  let dragging = false;
-  let startX = 0;
-  let startW = 0;
 
-  function onHandleDown(e: PointerEvent) {
-    dragging = true;
-    startX = e.clientX;
-    startW = resultsW;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }
-  function onHandleMove(e: PointerEvent) {
-    if (!dragging) return;
-    resultsW = clampW(startW + (startX - e.clientX)); // drag left widens
-  }
-  function onHandleUp() {
-    if (!dragging) return;
-    dragging = false;
+  // The sidebar's own width is view state it persists itself; the grid track has to read
+  // it from here, since a custom property set on the aside cannot size its parent's track.
+  const sidebarW = $derived($sidebarPrefs.collapsed ? SIDEBAR_RAIL_W : $sidebarPrefs.width);
+
+  function saveResultsW() {
     try {
       localStorage.setItem(RW_KEY, String(resultsW));
     } catch {
@@ -67,26 +56,19 @@
 
 <div class="app">
   <Toolbar />
-  <div class="body" style="--results-w: {resultsW}px">
-    <aside class="sidebar">
-      <SurfacesForm />
-      <PanelOptionsList />
-      <KeepOutList />
-    </aside>
+  <div class="body" style="--results-w: {resultsW}px; --sidebar-w: {sidebarW}px">
+    <Sidebar />
     <main class="stage">
       <LayoutCanvas />
     </main>
     <aside class="results">
-      <div
-        class="resize-handle"
-        class:dragging
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={$t('app.resizeResults')}
-        onpointerdown={onHandleDown}
-        onpointermove={onHandleMove}
-        onpointerup={onHandleUp}
-      ></div>
+      <ResizeHandle
+        edge="left"
+        width={resultsW}
+        label={$t('app.resizeResults')}
+        onresize={(w) => (resultsW = clampW(w))}
+        oncommit={saveResultsW}
+      />
       <ResultsSummary />
     </aside>
   </div>
@@ -101,46 +83,15 @@
   .body {
     flex: 1;
     display: grid;
-    grid-template-columns: 320px 1fr var(--results-w, 300px);
+    grid-template-columns: var(--sidebar-w, 320px) 1fr var(--results-w, 300px);
     min-height: 0;
   }
-  .sidebar,
   .results {
     overflow-y: auto;
     padding: 14px;
     background: var(--bg);
-  }
-  .sidebar {
-    border-right: 1px solid var(--border);
-  }
-  .results {
     position: relative;
     border-left: 1px solid var(--border);
-  }
-  .resize-handle {
-    position: absolute;
-    top: 0;
-    left: -3px;
-    width: 7px;
-    height: 100%;
-    cursor: col-resize;
-    z-index: 5;
-    touch-action: none;
-  }
-  .resize-handle::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 3px;
-    width: 1px;
-    height: 100%;
-    background: transparent;
-    transition: background 0.12s;
-  }
-  .resize-handle:hover::after,
-  .resize-handle.dragging::after {
-    background: var(--accent);
-    width: 2px;
   }
   .stage {
     min-width: 0;
@@ -155,9 +106,6 @@
     }
     .stage {
       height: 60vh;
-    }
-    .resize-handle {
-      display: none;
     }
   }
 </style>

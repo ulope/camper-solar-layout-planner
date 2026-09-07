@@ -110,7 +110,7 @@
 
     <div class="opts">
       <p class="group">{$t('optimizer.effort')}</p>
-      <div class="effort" role="group" aria-label={$t('optimizer.effortAria')}>
+      <div class="seg-group" role="group" aria-label={$t('optimizer.effortAria')}>
         <button
           class="seg"
           class:on={$optimizerEffort === 'fast'}
@@ -126,7 +126,7 @@
       </div>
 
       <p class="group">{$t('optimizer.minVoltage')}</p>
-      <div class="effort" role="group" aria-label={$t('optimizer.minVoltage')}>
+      <div class="seg-group" role="group" aria-label={$t('optimizer.minVoltage')}>
         <button
           class="seg"
           class:on={minVoltage === 0}
@@ -313,25 +313,6 @@
   }
   .group:not(:first-child) {
     margin-top: 14px;
-  }
-  .effort {
-    display: flex;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-  .seg {
-    flex: 1;
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    padding: 6px 10px;
-    font-size: 12px;
-    color: var(--text-dim);
-  }
-  .seg.on {
-    background: var(--panel-bg-2);
-    color: var(--text);
   }
   .criteria {
     list-style: none;

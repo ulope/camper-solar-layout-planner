@@ -208,26 +208,6 @@
     display: grid;
     gap: 10px;
   }
-  /* Segmented picker, matching the optimizer's effort control. */
-  .seg-group {
-    display: flex;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-  .seg {
-    flex: 1;
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    padding: 6px 10px;
-    font-size: 12px;
-    color: var(--text-dim);
-  }
-  .seg.on {
-    background: var(--panel-bg-2);
-    color: var(--text);
-  }
   .two {
     grid-template-columns: 1fr 1fr;
   }
