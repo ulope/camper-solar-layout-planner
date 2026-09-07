@@ -109,3 +109,27 @@ label {
   display: block;
   margin-bottom: 3px;
 }
+
+/* Segmented picker: a row of buttons acting as one control, with the active one filled.
+   Used by the optimizer effort/voltage controls, the surface and panel mounting pickers. */
+.seg-group {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.seg-group .seg {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.seg-group .seg.on {
+  background: var(--panel-bg-2);
+  color: var(--text);
+}
