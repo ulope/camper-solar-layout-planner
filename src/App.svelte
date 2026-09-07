@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Toolbar from './components/Toolbar.svelte';
-  import SurfacesForm from './components/SurfacesForm.svelte';
+  import SurfaceList from './components/SurfaceList.svelte';
   import PanelOptionsList from './components/PanelOptionsList.svelte';
-  import KeepOutList from './components/KeepOutList.svelte';
+  import SpacingForm from './components/SpacingForm.svelte';
   import LayoutCanvas from './components/LayoutCanvas.svelte';
   import ResultsSummary from './components/ResultsSummary.svelte';
   import ResizeHandle from './components/ResizeHandle.svelte';
@@ -55,9 +55,9 @@
   <Toolbar />
   <div class="body" style="--results-w: {resultsW}px">
     <aside class="sidebar">
-      <SurfacesForm />
+      <SurfaceList />
       <PanelOptionsList />
-      <KeepOutList />
+      <SpacingForm />
     </aside>
     <main class="stage">
       <LayoutCanvas />
