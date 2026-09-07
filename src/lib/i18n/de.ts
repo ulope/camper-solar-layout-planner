@@ -97,10 +97,34 @@ export const de: Catalog = {
   'panelModal.densityStat': '{value} Wp/m²',
   'panelModal.priceStat': '{value}/Wp',
 
+  // ----- Surface dialog -----
+  'surfaceModal.addTitle': 'Fläche hinzufügen',
+  'surfaceModal.editTitle': 'Fläche bearbeiten',
+  'surfaceModal.name': 'Name',
+  'surfaceModal.sizeGroup': 'Größe (cm)',
+  'surfaceModal.panelsGroup': 'Erlaubte Module',
+  'surfaceModal.lastSurface': 'Die letzte Fläche kann nicht entfernt werden.',
+  'surfaceModal.areaStat': '{area} · {keepOuts}',
+
+  // ----- Keep-out dialog -----
+  'keepOutModal.addTitle': 'Sperrfläche hinzufügen',
+  'keepOutModal.editTitle': 'Sperrfläche bearbeiten',
+  'keepOutModal.label': 'Bezeichnung',
+  'keepOutModal.positionGroup': 'Position (cm)',
+  'keepOutModal.sizeGroup': 'Größe (cm)',
+  'keepOutModal.onSurface': 'Auf {name}.',
+  'keepOutModal.hint': 'Gemessen ab der oberen linken Ecke der Fläche.',
+  'keepOutModal.outside': 'Diese Fläche ragt über den Rand der Fläche hinaus.',
+
   // ----- Keep-outs -----
   'keepOuts.title': 'Sperrflächen',
   'keepOuts.hint': 'Luken, Lüfter, Antennen. Zum Zeichnen auf der Zeichenfläche ziehen.',
   'keepOuts.empty': 'Keine Sperrflächen auf dieser Fläche.',
+  'keepOuts.count': { one: '{count} Sperrfläche', other: '{count} Sperrflächen' },
+  'keepOuts.add': 'Sperrfläche hinzufügen',
+  'keepOuts.addTo': 'Eine Sperrfläche zu {name} hinzufügen',
+  'keepOuts.edit': '{name} bearbeiten',
+  'keepOuts.rect': '{x}, {y} · {width}×{height} cm',
   'keepOuts.remove': 'Entfernen',
   'keepOuts.x': 'X',
   'keepOuts.y': 'Y',

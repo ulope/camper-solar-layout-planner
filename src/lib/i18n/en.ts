@@ -88,10 +88,34 @@ export const en = {
   'panelModal.densityStat': '{value} Wp/m²',
   'panelModal.priceStat': '{value}/Wp',
 
+  // ----- Surface dialog -----
+  'surfaceModal.addTitle': 'Add surface',
+  'surfaceModal.editTitle': 'Edit surface',
+  'surfaceModal.name': 'Name',
+  'surfaceModal.sizeGroup': 'Size (cm)',
+  'surfaceModal.panelsGroup': 'Panels allowed',
+  'surfaceModal.lastSurface': 'The last surface cannot be removed.',
+  'surfaceModal.areaStat': '{area} · {keepOuts}',
+
+  // ----- Keep-out dialog -----
+  'keepOutModal.addTitle': 'Add keep-out area',
+  'keepOutModal.editTitle': 'Edit keep-out area',
+  'keepOutModal.label': 'Label',
+  'keepOutModal.positionGroup': 'Position (cm)',
+  'keepOutModal.sizeGroup': 'Size (cm)',
+  'keepOutModal.onSurface': 'On {name}.',
+  'keepOutModal.hint': 'Measured from the top-left corner of the surface.',
+  'keepOutModal.outside': 'This area reaches past the edge of the surface.',
+
   // ----- Keep-outs -----
   'keepOuts.title': 'Keep-out areas',
   'keepOuts.hint': 'Hatches, vents, antennas. Drag on the canvas to draw one.',
   'keepOuts.empty': 'No keep-out areas on this surface.',
+  'keepOuts.count': { one: '{count} keep-out', other: '{count} keep-outs' },
+  'keepOuts.add': 'Add keep-out',
+  'keepOuts.addTo': 'Add a keep-out to {name}',
+  'keepOuts.edit': 'Edit {name}',
+  'keepOuts.rect': '{x}, {y} · {width}×{height} cm',
   'keepOuts.remove': 'Remove',
   'keepOuts.x': 'X',
   'keepOuts.y': 'Y',
