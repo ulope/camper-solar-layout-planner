@@ -12,6 +12,7 @@
   import { defaultConfig, exportConfig, importConfig } from '../lib/persistence';
   import OptimizeButton from './OptimizeButton.svelte';
   import Popover from './Popover.svelte';
+  import { sidebarPrefs, toggleSidebar } from '../lib/uiPrefs';
   import { fmt, LOCALES, locale, localeInfo, setLocale, t, type Locale } from '../lib/i18n';
 
   let fileInput: HTMLInputElement;
@@ -19,6 +20,7 @@
   let langOpen = $state(false);
 
   const current = $derived(localeInfo($locale));
+  const sidebarOpen = $derived(!$sidebarPrefs.collapsed);
 
   /**
    * The configuration as a JSON file, carrying the layout shown for each surface when
@@ -132,6 +134,43 @@
 
 <header class="bar">
   <div class="title">
+    <!-- The sidebar's toggle lives here rather than inside the sidebar itself: it stays in
+         the same place whether the panel is open or collapsed to its rail, and costs the
+         panel no room of its own. -->
+    <button
+      class="ghost panel-toggle"
+      class:on={sidebarOpen}
+      aria-expanded={sidebarOpen}
+      aria-controls="sidebar"
+      aria-label={$t(sidebarOpen ? 'sidebar.collapse' : 'sidebar.expand')}
+      title={$t(sidebarOpen ? 'sidebar.collapse' : 'sidebar.expand')}
+      onclick={toggleSidebar}
+    >
+      <!-- Drawn for the same reason as the globe below: the ▤-style glyphs render at
+           wildly different weights across platforms. The filled rail shows the panel is
+           open. -->
+      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+        <rect
+          x="1.6"
+          y="2.6"
+          width="12.8"
+          height="10.8"
+          rx="2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.2"
+        />
+        <path
+          d="M6.2 3.2v9.6"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.2"
+        />
+        {#if sidebarOpen}
+          <rect x="2.2" y="3.2" width="4" height="9.6" fill="currentColor" opacity="0.55" />
+        {/if}
+      </svg>
+    </button>
     <span class="logo" aria-hidden="true">☀</span>
     <h1>{$t('app.title')}</h1>
   </div>
@@ -230,6 +269,19 @@
     font-size: 20px;
     color: var(--accent);
     flex: none;
+  }
+  .panel-toggle {
+    display: inline-flex;
+    flex: none;
+    padding: 5px 7px;
+    line-height: 1;
+    color: var(--text-dim);
+  }
+  .panel-toggle:hover {
+    color: var(--text);
+  }
+  .panel-toggle.on {
+    color: var(--text);
   }
   h1 {
     font-size: 16px;

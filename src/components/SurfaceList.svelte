@@ -9,6 +9,7 @@
   import { isPanelEnabled, isPanelFlexible } from '../lib/panels';
   import { t, type MessageKey } from '../lib/i18n';
   import type { KeepOut, Surface } from '../lib/types';
+  import Chevron from './Chevron.svelte';
   import SurfaceModal from './SurfaceModal.svelte';
   import KeepOutModal from './KeepOutModal.svelte';
 
@@ -122,7 +123,7 @@
           onclick={(e) => {
             e.stopPropagation();
             toggleSurfaceExpanded(s.id);
-          }}><span class:open={isExpanded} aria-hidden="true">▸</span></button
+          }}><Chevron open={isExpanded} size={13} /></button
         >
         <span class="text">
           <span class="name" title={s.name}>{s.name}</span>
@@ -268,19 +269,15 @@
   }
   .caret {
     flex: none;
+    display: flex;
+    align-items: center;
     border: none;
-    padding: 2px 4px;
+    padding: 4px 3px;
     color: var(--text-dim);
-    font-size: 10px;
-    line-height: 1;
     background: transparent;
   }
-  .caret span {
-    display: inline-block;
-    transition: transform 0.12s;
-  }
-  .caret span.open {
-    transform: rotate(90deg);
+  .caret:hover {
+    color: var(--text);
   }
   .edit {
     flex: none;
