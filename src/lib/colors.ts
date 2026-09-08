@@ -1,6 +1,6 @@
 /**
- * Colors for panel models. Two models placed on the same layout must never share one,
- * or a plan drawn from a large catalog reads as a single model; see
+ * Colors for panel models. Two models that can be on screen at the same time must never
+ * share one, or a plan drawn from a large catalog reads as a single model; see
  * {@link assignPanelColors}.
  */
 
@@ -74,65 +74,109 @@ function labDistance(a: Lab, b: Lab): number {
 
 const PALETTE_LAB = PANEL_PALETTE.map(oklab);
 
+/** The models each option of one surface places — one entry per option. */
+export type SurfaceOptions = readonly (readonly string[])[];
+
 /**
- * Pick a color for every model, keeping models that appear on the same layout apart.
+ * Pick a color for every model, keeping the ones that can be seen together apart.
  *
- * `groups` is one entry per computed layout: the ids of the models it places. Two models
- * that never share a layout may share a color — nothing ever draws them together — which
- * is what lets a catalog far larger than the palette still come out legible.
+ * `bySurface` is the computed options grouped by the surface they belong to. Everything
+ * drawn at once has to be distinguishable, and every surface shows one of its options at
+ * a time, so two models clash when they share an option *or* when they sit on different
+ * surfaces — either way a single view can hold both. Two models on the same surface but
+ * in different options never appear together and may share a color, which is what lets a
+ * catalog far larger than the palette still come out legible.
  *
  * `optionIds` is the catalog in its stored order. It decides which models get a color at
  * all, and breaks every tie, so the result depends only on the inputs.
  */
 export function assignPanelColors(
   optionIds: readonly string[],
-  groups: Iterable<readonly string[]>,
+  bySurface: Iterable<SurfaceOptions>,
 ): Map<string, string> {
   const slot = new Map(optionIds.map((id, i) => [id, i]));
-  const conflicts = new Map<string, Set<string>>(optionIds.map((id) => [id, new Set<string>()]));
-  for (const group of groups) {
-    const ids = [...new Set(group)].filter((id) => conflicts.has(id));
-    for (const a of ids) {
-      for (const b of ids) if (a !== b) conflicts.get(a)!.add(b);
+  // Two grades of clash: models sharing an option are drawn side by side and *must*
+  // differ; models on different surfaces merely can be shown together. Keeping them
+  // apart lets a catalog that outgrows the palette give up the weaker claim first.
+  const sameOption = new Map<string, Set<string>>(optionIds.map((id) => [id, new Set()]));
+  const sameView = new Map<string, Set<string>>(optionIds.map((id) => [id, new Set()]));
+  const link = (into: Map<string, Set<string>>, a: string, b: string) => {
+    if (a === b || !into.has(a) || !into.has(b)) return;
+    into.get(a)!.add(b);
+    into.get(b)!.add(a);
+  };
+
+  const perSurface: string[][] = [];
+  for (const options of bySurface) {
+    const placed = new Set<string>();
+    for (const option of options) {
+      const ids = [...new Set(option)];
+      for (const a of ids) {
+        placed.add(a);
+        for (const b of ids) link(sameOption, a, b);
+      }
+    }
+    perSurface.push([...placed]);
+  }
+  // A model placed on two surfaces lands on both sides of this and so ends up clashing
+  // with nearly everything — right, since it can turn up opposite any of them.
+  for (let i = 0; i < perSurface.length; i++) {
+    for (let j = i + 1; j < perSurface.length; j++) {
+      for (const a of perSurface[i]) {
+        for (const b of perSurface[j]) link(sameView, a, b);
+      }
     }
   }
 
   // Color the most constrained models first (Welsh-Powell): by the time a model with few
   // neighbours is reached the pool is still wide open, whereas the reverse order paints
   // the crowded ones into a corner.
-  const order = [...optionIds].sort((a, b) => {
-    const byDegree = conflicts.get(b)!.size - conflicts.get(a)!.size;
-    return byDegree !== 0 ? byDegree : slot.get(a)! - slot.get(b)!;
-  });
+  const degree = (id: string) => sameOption.get(id)!.size + sameView.get(id)!.size;
+  const order = [...optionIds].sort((a, b) => degree(b) - degree(a) || slot.get(a)! - slot.get(b)!);
 
   const colors = new Map<string, string>();
   for (const id of order) {
-    const taken = new Set<string>();
+    const inOption = new Set<string>();
+    const inView = new Set<string>();
     const neighbours: Lab[] = [];
-    for (const other of conflicts.get(id)!) {
-      const color = colors.get(other);
-      if (color === undefined) continue; // not colored yet; it will avoid us instead
-      taken.add(color);
-      neighbours.push(oklab(color));
-    }
+    const seen = (into: Set<string>, from: Set<string>) => {
+      for (const other of from) {
+        const color = colors.get(other);
+        if (color === undefined) continue; // not colored yet; it will avoid us instead
+        into.add(color);
+        neighbours.push(oklab(color));
+      }
+    };
+    seen(inOption, sameOption.get(id)!);
+    seen(inView, sameView.get(id)!);
 
     // Walk the pool from this model's own slot, so a catalog whose models never meet
-    // keeps exactly the colors it has today. Prefer a color no neighbour uses, then the
-    // one that looks least like them; ties fall to whichever came first in the walk.
+    // keeps exactly the colors it has today. Prefer a color no one it shares an option
+    // with uses, then one no one it shares a view with uses, then the one that looks
+    // least like any of them; ties fall to whichever came first in the walk.
     const preferred = slot.get(id)! % PANEL_PALETTE.length;
     let best = PANEL_PALETTE[preferred];
-    let bestFree = -1;
+    let bestOption = -1;
+    let bestView = -1;
     let bestGap = -1;
     for (let step = 0; step < PANEL_PALETTE.length; step++) {
       const i = (preferred + step) % PANEL_PALETTE.length;
       const color = PANEL_PALETTE[i];
-      const free = taken.has(color) ? 0 : 1;
+      const freeOption = inOption.has(color) ? 0 : 1;
+      const freeView = inView.has(color) ? 0 : 1;
       const gap = neighbours.length
         ? Math.min(...neighbours.map((n) => labDistance(n, PALETTE_LAB[i])))
         : Infinity;
-      if (free > bestFree || (free === bestFree && gap > bestGap)) {
+      const better =
+        freeOption !== bestOption
+          ? freeOption > bestOption
+          : freeView !== bestView
+            ? freeView > bestView
+            : gap > bestGap;
+      if (better) {
         best = color;
-        bestFree = free;
+        bestOption = freeOption;
+        bestView = freeView;
         bestGap = gap;
       }
     }

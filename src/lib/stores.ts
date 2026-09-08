@@ -72,19 +72,18 @@ export const selectedLayouts = derived(
 
 /**
  * The color each panel model is drawn in, everywhere. Derived from every computed option
- * of every surface rather than from the one on screen, so a model keeps its color as the
- * alternatives are clicked through, and no single option can come out all one color.
+ * of every surface rather than from the ones on screen, so a model keeps its color as the
+ * alternatives are clicked through, and nothing drawn together comes out the same color —
+ * the surfaces are kept apart because the canvas draws all of them at once.
  */
-export const panelColors = derived([config, layoutsBySurface], ([$config, $results]) => {
-  const groups: string[][] = [];
-  for (const layouts of Object.values($results)) {
-    for (const l of layouts) groups.push([...new Set(l.placements.map((p) => p.optionId))]);
-  }
-  return assignPanelColors(
+export const panelColors = derived([config, layoutsBySurface], ([$config, $results]) =>
+  assignPanelColors(
     $config.panelOptions.map((o) => o.id),
-    groups,
-  );
-});
+    Object.values($results).map((layouts) =>
+      layouts.map((l) => [...new Set(l.placements.map((p) => p.optionId))]),
+    ),
+  ),
+);
 
 /** The surface the forms currently edit; falls back to the first one. */
 export const activeSurface = derived(
