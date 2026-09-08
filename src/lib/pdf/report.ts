@@ -514,10 +514,12 @@ export function buildLayoutPdf(input: PdfReportInput): jsPDF {
     input.colors ??
     assignPanelColors(
       config.panelOptions.map((o) => o.id),
-      config.surfaces
-        .map((s) => selected[s.id])
-        .filter((l): l is Layout => !!l)
-        .map((l) => [...new Set(l.placements.map((p) => p.optionId))]),
+      // One layout per surface here, so each surface contributes the single option the
+      // report draws for it.
+      config.surfaces.map((s) => {
+        const l = selected[s.id];
+        return l ? [[...new Set(l.placements.map((p) => p.optionId))]] : [];
+      }),
     );
   const colorOf = (optionId: string) => colors.get(optionId) ?? panelColor(0);
   const nameOf = (optionId: string) =>
