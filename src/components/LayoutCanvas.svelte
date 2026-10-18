@@ -564,39 +564,32 @@
       ctx.strokeRect(px, py, pw, ph);
 
       // Label: panel name + power, stacked when there is room, else just power.
-      // Long names wrap to the label width so they never spill over neighbors. On a tall
-      // panel the label runs along the long side, so a turned panel reads as the same
-      // panel turned rather than as a narrower one.
-      const tall = ph > pw;
-      const lw = tall ? ph : pw; // label box, in the label's own reading direction
-      const lh = tall ? pw : ph;
+      // Long names wrap to the panel width so they never spill over neighbors.
+      const cx = px + pw / 2;
+      const cy = py + ph / 2;
       const name = nameForOption(p.optionId);
-      ctx.save();
-      ctx.translate(px + pw / 2, py + ph / 2);
-      if (tall) ctx.rotate(-Math.PI / 2);
       ctx.fillStyle = '#0d1117';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const powerLabel = $t('canvas.power', { power: $fmt.num(p.power, 0) });
-      if (name && lw > 44 && lh > 32) {
+      if (name && pw > 44 && ph > 32) {
         ctx.font = NAME_FONT;
-        const budget = lh - 2 * LABEL_PAD - POWER_LINE_H;
+        const budget = ph - 2 * LABEL_PAD - POWER_LINE_H;
         const maxLines = Math.max(1, Math.floor(budget / NAME_LINE_H));
         const measure = (s: string) => ctx.measureText(s).width;
-        const lines = wrapText(name, lw - 2 * LABEL_PAD, measure, maxLines);
+        const lines = wrapText(name, pw - 2 * LABEL_PAD, measure, maxLines);
         const total = lines.length * NAME_LINE_H + POWER_LINE_H;
-        let ty = -total / 2 + NAME_LINE_H / 2;
+        let ty = cy - total / 2 + NAME_LINE_H / 2;
         for (const line of lines) {
-          ctx.fillText(line, 0, ty);
+          ctx.fillText(line, cx, ty);
           ty += NAME_LINE_H;
         }
         ctx.font = '10px system-ui, sans-serif';
-        ctx.fillText(powerLabel, 0, ty - NAME_LINE_H / 2 + POWER_LINE_H / 2);
-      } else if (lw > 30 && lh > 16) {
+        ctx.fillText(powerLabel, cx, ty - NAME_LINE_H / 2 + POWER_LINE_H / 2);
+      } else if (pw > 30 && ph > 16) {
         ctx.font = '600 10px system-ui, sans-serif';
-        ctx.fillText(powerLabel, 0, 0);
+        ctx.fillText(powerLabel, cx, cy);
       }
-      ctx.restore();
     }
 
     // Keep-outs (drawn on top so they are always visible).
