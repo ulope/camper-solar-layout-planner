@@ -1097,7 +1097,13 @@
     height: 100%;
     overflow: hidden;
   }
+  /* Out of flow, so the wrap's size comes only from the layout around it. In flow, the
+     canvas's own pixel size props the grid row open and the wrap can never shrink back,
+     leaving the fit computed for a canvas taller than the window. */
   canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
     display: block;
     touch-action: none;
   }
