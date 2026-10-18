@@ -47,10 +47,15 @@
   }
 
   let draft = $state<Draft>(toDraft(null));
+  // The model Save writes back to; null once the dialog has turned into a duplicate.
+  let target = $state<PanelOption | null>(null);
 
   // Re-seed the draft every time the modal opens.
   $effect(() => {
-    if (open) draft = toDraft(option);
+    if (open) {
+      draft = toDraft(option);
+      target = option;
+    }
   });
 
   const width = $derived(toNum(draft.width));
@@ -89,17 +94,24 @@
       current: toOptNum(draft.current),
       flexible: draft.flexible,
     };
-    if (option) updatePanelOption(option.id, patch);
+    if (target) updatePanelOption(target.id, patch);
     else addPanelOption(patch);
     open = false;
   }
 
   function del() {
-    if (!option) return;
-    if (confirm($t('panels.removeConfirm', { name: option.name }))) {
-      removePanelOption(option.id);
+    if (!target) return;
+    if (confirm($t('panels.removeConfirm', { name: target.name }))) {
+      removePanelOption(target.id);
       open = false;
     }
+  }
+
+  // Turns the dialog into "add" with the current values (unsaved edits included), so a
+  // variant of an existing model only needs the fields that differ.
+  function duplicate() {
+    target = null;
+    draft.name = $t('panelModal.copyName', { name: draft.name.trim() });
   }
 
   // Enter anywhere in the form saves, matching the primary action.
@@ -111,7 +123,7 @@
   }
 </script>
 
-<Modal bind:open title={$t(option ? 'panelModal.editTitle' : 'panelModal.addTitle')}>
+<Modal bind:open title={$t(target ? 'panelModal.editTitle' : 'panelModal.addTitle')}>
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div class="fields" onkeydown={onKeyDown} role="form">
     <div class="full">
@@ -182,8 +194,11 @@
   </div>
 
   {#snippet footer()}
-    {#if option}
+    {#if target}
       <button class="danger ghost" onclick={del}>{$t('common.delete')}</button>
+      <button class="ghost" onclick={duplicate} title={$t('panelModal.duplicateTitle')}
+        >{$t('panelModal.duplicate')}</button
+      >
     {/if}
     <span class="spacer"></span>
     <button class="ghost" onclick={() => (open = false)}>{$t('common.cancel')}</button>
