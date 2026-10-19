@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  ACCENT_COUNT,
   PANEL_PALETTE,
   assignPanelColors,
   colorDistance,
@@ -14,6 +13,9 @@ import { mixColor } from './pdf/report';
  * long before the palette grew — sit at 0.095, so that is the bar the additions meet.
  */
 const MIN_DISTANCE = 0.095;
+
+/** The app's long-standing accents, which head the palette. */
+const ACCENTS = PANEL_PALETTE.slice(0, 8);
 
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `p${i}`);
 
@@ -178,21 +180,16 @@ describe('assignPanelColors', () => {
     // softer additions is reached for.
     const catalog = ids(12);
     const colors = assignPanelColors(catalog, [[catalog]]);
-    const accents = PANEL_PALETTE.slice(0, ACCENT_COUNT);
-    const used = new Set(colors.values());
-    expect(accents.every((c) => used.has(c))).toBe(true);
+        const used = new Set(colors.values());
+    expect(ACCENTS.every((c) => used.has(c))).toBe(true);
   });
 
-  it('keeps a model on its own color when nothing it meets uses it', () => {
-    // p0 and p1 are blue and green and do not clash, so neither has anything to resolve;
-    // p1 used to be pushed off to lime just for sitting beside blue.
+  it('gives placed models the best colors first, clash or not', () => {
+    // p9, p10 and p12 sit at violet, stone and olive; placed, they take the first three
+    // colors in the pool instead.
     const catalog = ids(20);
-    const colors = assignPanelColors(catalog, [[['p0', 'p1', 'p2']]]);
-    expect(['p0', 'p1', 'p2'].map((id) => colors.get(id))).toEqual([
-      panelColor(0),
-      panelColor(1),
-      panelColor(2),
-    ]);
+    const colors = assignPanelColors(catalog, [[['p9', 'p10', 'p12']]]);
+    expect(['p9', 'p10', 'p12'].map((id) => colors.get(id))).toEqual(PANEL_PALETTE.slice(0, 3));
   });
 
   it('moves a clashing model to a free accent rather than a softer color', () => {
@@ -200,13 +197,22 @@ describe('assignPanelColors', () => {
     const catalog = ids(20);
     const colors = assignPanelColors(catalog, [[['p0', 'p16']]]);
     expect(colors.get('p0')).not.toBe(colors.get('p16'));
-    expect(PANEL_PALETTE.slice(0, ACCENT_COUNT)).toContain(colors.get('p16'));
+    expect(ACCENTS).toContain(colors.get('p16'));
   });
 
-  it('keeps a lone placed model on its own slot color', () => {
+  it('gives a lone placed model the first color', () => {
     const catalog = ids(20);
     const colors = assignPanelColors(catalog, [alone('p10')]);
-    expect(colors.get('p10')).toBe(panelColor(10));
+    expect(colors.get('p10')).toBe(PANEL_PALETTE[0]);
+    // The rest are never drawn and keep their slot colors.
+    expect(colors.get('p11')).toBe(panelColor(11));
+  });
+
+  it('lets alternatives on one surface reuse the best colors', () => {
+    // Only one option of a surface is drawn at a time, so each can lead with blue.
+    const catalog = ids(20);
+    const colors = assignPanelColors(catalog, [alone('p5', 'p9', 'p14')]);
+    expect(['p5', 'p9', 'p14'].map((id) => colors.get(id))).toEqual(Array(3).fill(PANEL_PALETTE[0]));
   });
 
   it('is stable for the same inputs', () => {
