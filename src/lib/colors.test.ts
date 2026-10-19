@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ACCENT_COUNT,
   PANEL_PALETTE,
   assignPanelColors,
   colorDistance,
@@ -170,6 +171,42 @@ describe('assignPanelColors', () => {
     // Every palette entry is in play; the two that repeat are as far from their
     // neighbours as anything left could be.
     expect(new Set(colors.values()).size).toBe(n);
+  });
+
+  it('settles conflicts on the accents while any of them is free', () => {
+    // Twelve models side by side: the eight accents must all be used before any of the
+    // softer additions is reached for.
+    const catalog = ids(12);
+    const colors = assignPanelColors(catalog, [[catalog]]);
+    const accents = PANEL_PALETTE.slice(0, ACCENT_COUNT);
+    const used = new Set(colors.values());
+    expect(accents.every((c) => used.has(c))).toBe(true);
+  });
+
+  it('keeps a model on its own color when nothing it meets uses it', () => {
+    // p0 and p1 are blue and green and do not clash, so neither has anything to resolve;
+    // p1 used to be pushed off to lime just for sitting beside blue.
+    const catalog = ids(20);
+    const colors = assignPanelColors(catalog, [[['p0', 'p1', 'p2']]]);
+    expect(['p0', 'p1', 'p2'].map((id) => colors.get(id))).toEqual([
+      panelColor(0),
+      panelColor(1),
+      panelColor(2),
+    ]);
+  });
+
+  it('moves a clashing model to a free accent rather than a softer color', () => {
+    // p0 and p16 share blue's slot, so one of them has to move; seven accents are open.
+    const catalog = ids(20);
+    const colors = assignPanelColors(catalog, [[['p0', 'p16']]]);
+    expect(colors.get('p0')).not.toBe(colors.get('p16'));
+    expect(PANEL_PALETTE.slice(0, ACCENT_COUNT)).toContain(colors.get('p16'));
+  });
+
+  it('keeps a lone placed model on its own slot color', () => {
+    const catalog = ids(20);
+    const colors = assignPanelColors(catalog, [alone('p10')]);
+    expect(colors.get('p10')).toBe(panelColor(10));
   });
 
   it('is stable for the same inputs', () => {
