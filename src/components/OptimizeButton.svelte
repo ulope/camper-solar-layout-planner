@@ -77,6 +77,13 @@
     setMinVoltage(Number((e.target as HTMLInputElement).value));
   }
 
+  // Starting a run closes the options. The panel unmounts while a thorough run is in
+  // progress, but optionsOpen lives here, so without this it would pop back open after.
+  function optimize() {
+    optionsOpen = false;
+    runOptimize();
+  }
+
   function setTolerance(e: Event) {
     const pct = Number((e.target as HTMLInputElement).value);
     const clamped = Math.min(50, Math.max(0, Number.isFinite(pct) ? pct : 0));
@@ -97,7 +104,7 @@
   <Popover bind:open={optionsOpen} label={$t('optimizer.options')}>
     {#snippet trigger(toggleOpen: () => void)}
       <div class="split" class:pulse={$layoutStale}>
-        <button class="primary go" onclick={runOptimize}>{$t('optimizer.optimize')}</button>
+        <button class="primary go" onclick={optimize}>{$t('optimizer.optimize')}</button>
         <button
           class="primary caret"
           aria-label={$t('optimizer.options')}
