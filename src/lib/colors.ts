@@ -30,6 +30,12 @@ export const PANEL_PALETTE: readonly string[] = [
   '#06b6d4', // cyan
 ];
 
+/**
+ * How many entries at the head of {@link PANEL_PALETTE} are the strong accents. When a
+ * model has to move off its own color, these are tried before the softer additions.
+ */
+export const ACCENT_COUNT = 8;
+
 /** The color a model falls back to when nothing places it: its slot in the pool. */
 export function panelColor(index: number): string {
   return PANEL_PALETTE[index % PANEL_PALETTE.length];
@@ -152,18 +158,23 @@ export function assignPanelColors(
 
     // Walk the pool from this model's own slot, so a catalog whose models never meet
     // keeps exactly the colors it has today. Prefer a color no one it shares an option
-    // with uses, then one no one it shares a view with uses, then the one that looks
-    // least like any of them; ties fall to whichever came first in the walk.
+    // with uses, then one no one it shares a view with uses. Among the colors that are
+    // entirely free, the model's own beats the rest — there is nothing to resolve — and
+    // a strong accent beats a softer addition, which is the fallback for when the
+    // accents are taken rather than a pick on its own merit. Then take the one that
+    // looks least like any neighbour; ties fall to whichever came first in the walk.
     const preferred = slot.get(id)! % PANEL_PALETTE.length;
     let best = PANEL_PALETTE[preferred];
     let bestOption = -1;
     let bestView = -1;
+    let bestRank = -1;
     let bestGap = -1;
     for (let step = 0; step < PANEL_PALETTE.length; step++) {
       const i = (preferred + step) % PANEL_PALETTE.length;
       const color = PANEL_PALETTE[i];
       const freeOption = inOption.has(color) ? 0 : 1;
       const freeView = inView.has(color) ? 0 : 1;
+      const rank = !freeOption || !freeView ? 0 : step === 0 ? 2 : i < ACCENT_COUNT ? 1 : 0;
       const gap = neighbours.length
         ? Math.min(...neighbours.map((n) => labDistance(n, PALETTE_LAB[i])))
         : Infinity;
@@ -172,11 +183,14 @@ export function assignPanelColors(
           ? freeOption > bestOption
           : freeView !== bestView
             ? freeView > bestView
-            : gap > bestGap;
+            : rank !== bestRank
+              ? rank > bestRank
+              : gap > bestGap;
       if (better) {
         best = color;
         bestOption = freeOption;
         bestView = freeView;
+        bestRank = rank;
         bestGap = gap;
       }
     }
